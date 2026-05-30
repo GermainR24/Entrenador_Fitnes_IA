@@ -1,0 +1,4 @@
+# Ignorando archivos sensibles y de entorno del backend de GymAI
+gymai-backend/.env
+gymai-backend/fitnes-ia.db
+gymai-backend/venv/
