@@ -2,3 +2,6 @@
 gymai-backend/.env
 gymai-backend/fitnes-ia.db
 gymai-backend/venv/
+gymai-frontend/.env
+.env
+package-lock.json
