@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ProgressChart from '../components/svg/ProgressChart.jsx'
-import MuscleMap     from '../components/svg/MuscleMap.jsx'
+import HombreFrontal from '../components/svg/HombreFrontal.jsx'
+import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
 
 // Chart data per exercise
 const EXERCISES = [
@@ -79,9 +80,9 @@ export default function HistoryScreen({ go }) {
         <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px', textAlign: 'center' }}>
           <div className="label" style={{ marginBottom: '8px' }}>Volumen muscular acumulado</div>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <MuscleMap
-              activeIds={['chest']}
-              tiredIds={['lshoulder', 'rshoulder', 'lquad', 'rquad']}
+            <HombreFrontal
+              activeIds={mapIdsToSlugs(['chest', 'lshoulder', 'rshoulder', 'lquad', 'rquad'])}
+              width={200}
             />
           </div>
         </div>

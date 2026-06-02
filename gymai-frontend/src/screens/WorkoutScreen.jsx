@@ -1,4 +1,5 @@
-import MuscleMap  from '../components/svg/MuscleMap.jsx'
+import HombreFrontal from '../components/svg/HombreFrontal.jsx'
+import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
 import WaveAudio  from '../components/shared/WaveAudio.jsx'
 
 export default function WorkoutScreen({ go }) {
@@ -30,7 +31,7 @@ export default function WorkoutScreen({ go }) {
             style={{ borderRadius: 'var(--r2)', padding: '14px', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
           >
             <div className="label" style={{ fontSize: '9px' }}>Mapa activo</div>
-            <MuscleMap activeIds={['chest']} />
+            <HombreFrontal activeIds={mapIdsToSlugs(['chest'])} width={120} />
           </div>
 
           {/* Camera + audio column */}

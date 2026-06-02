@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import MuscleMap from '../components/svg/MuscleMap.jsx'
+import HombreFrontal from '../components/svg/HombreFrontal.jsx'
+import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
 
 // ── Default routine ──────────────────────────────────────────────────────────
 const DEFAULT_ROUTINE = [
@@ -79,9 +80,10 @@ export default function PlannerScreen({ go }) {
         <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px' }}>
           <div className="label" style={{ marginBottom: '10px' }}>Toca si tienes alguna molestia</div>
           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-            <MuscleMap
-              painIds={[...painZones]}
-              onToggle={togglePain}
+            <HombreFrontal
+              activeIds={mapIdsToSlugs([...painZones])}
+              onMuscleClick={id => togglePain(id)}
+              width={180}
             />
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: '12px', color: 'var(--text3)', marginBottom: '10px' }}>

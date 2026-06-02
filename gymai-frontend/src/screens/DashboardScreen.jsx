@@ -1,4 +1,5 @@
-import MuscleMap from '../components/svg/MuscleMap.jsx'
+import HombreFrontal from '../components/svg/HombreFrontal.jsx'
+import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
 
 export default function DashboardScreen({ go }) {
   return (
@@ -71,9 +72,9 @@ export default function DashboardScreen({ go }) {
         <div>
           <div className="label" style={{ marginBottom: '8px' }}>Fatiga residual — hoy</div>
           <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <MuscleMap
-              activeIds={['chest']}
-              tiredIds={['lshoulder', 'rshoulder', 'lcalf', 'rcalf']}
+            <HombreFrontal
+              activeIds={mapIdsToSlugs(['chest', 'lshoulder', 'rshoulder', 'lcalf', 'rcalf'])}
+              width={140}
             />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <Legend color="rgba(74,222,128,0.5)"   label="Activo hoy"    />
