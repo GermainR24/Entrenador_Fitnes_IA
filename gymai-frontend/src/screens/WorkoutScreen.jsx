@@ -1,10 +1,21 @@
+import { useEffect } from 'react'
 import HombreFrontal from '../components/svg/HombreFrontal.jsx'
 import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
-import WaveAudio  from '../components/shared/WaveAudio.jsx'
+import WaveAudio from '../components/shared/WaveAudio.jsx'
+import useMediaPipe from '../hooks/useMediaPipe.js'
 
 export default function WorkoutScreen({ go }) {
+  const { videoRef, canvasRef, startCamera, stopCamera, error } = useMediaPipe()
+
+  // Inicia la cámara al montar, la detiene al desmontar
+  useEffect(() => {
+    startCamera()
+    return () => stopCamera()
+  }, [startCamera, stopCamera])
+
   return (
     <>
+      {/* Barra superior */}
       <div className="nav-bar">
         <button className="back-btn" onClick={() => go('scan')}>← Volver</button>
         <span style={{ fontFamily: "'Syne', sans-serif", fontSize: '14px', fontWeight: 700 }}>
@@ -14,7 +25,7 @@ export default function WorkoutScreen({ go }) {
       </div>
 
       <div className="screen-body">
-        {/* Exercise title */}
+        {/* Título del ejercicio */}
         <div>
           <div className="label" style={{ marginBottom: '4px' }}>Músculo activo</div>
           <div style={{ fontFamily: "'Syne', sans-serif", fontSize: '18px', fontWeight: 700 }}>
@@ -23,38 +34,114 @@ export default function WorkoutScreen({ go }) {
           </div>
         </div>
 
-        {/* Two-column: muscle map + camera/audio */}
+        {/* Dos columnas: mapa muscular + cámara */}
         <div style={{ display: 'flex', gap: '12px' }}>
-          {/* Muscle map column */}
+          {/* Columna izquierda: Mapa activo */}
           <div
             className="glass"
-            style={{ borderRadius: 'var(--r2)', padding: '14px', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
+            style={{
+              borderRadius: 'var(--r2)',
+              padding: '14px',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '8px'
+            }}
           >
             <div className="label" style={{ fontSize: '9px' }}>Mapa activo</div>
             <HombreFrontal activeIds={mapIdsToSlugs(['chest'])} width={120} />
           </div>
 
-          {/* Camera + audio column */}
+          {/* Columna derecha: Cámara + IA */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* Camera / pose skeleton */}
             <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '12px' }}>
-              <div className="label" style={{ fontSize: '9px', marginBottom: '6px' }}>Cámara + pose</div>
-              <div style={{ aspectRatio: '3/4', background: 'rgba(0,0,0,0.5)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <PoseSkeleton />
+              <div className="label" style={{ fontSize: '9px', marginBottom: '6px' }}>
+                Cámara + pose
+              </div>
+
+              {/* Contenedor de la cámara (relación 4:3 típica de la webcam) */}
+              <div
+                style={{
+                  position: 'relative',
+                  aspectRatio: '4/3',
+                  background: '#000',
+                  borderRadius: '8px',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Video en espejo */}
+                <video
+                  ref={videoRef}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    transform: 'scaleX(-1)'
+                  }}
+                  playsInline
+                  muted
+                />
+
+                {/* Canvas para el esqueleto (mismas dimensiones) */}
+                <canvas
+                  ref={canvasRef}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    transform: 'scaleX(-1)'
+                  }}
+                />
+
+                {/* Mensaje de error si la cámara falla o no da permisos */}
+                {error && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(0,0,0,0.7)',
+                      color: '#f43f5e',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      padding: '16px',
+                      fontSize: '12px'
+                    }}
+                  >
+                    ⚠️ {error}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Audio wave */}
+            {/* Visualizador de audio IA */}
             <div className="glass" style={{ borderRadius: '10px', padding: '10px' }}>
-              <div className="label" style={{ fontSize: '9px', marginBottom: '6px' }}>Audio IA</div>
+              <div className="label" style={{ fontSize: '9px', marginBottom: '6px' }}>
+                Audio IA
+              </div>
               <WaveAudio barCount={8} />
             </div>
           </div>
         </div>
 
-        {/* Correction card */}
+        {/* Tarjeta de corrección postural */}
         <div className="correction-card">
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(245,158,11,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: 'rgba(245,158,11,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
               <line x1="12" y1="8" x2="12" y2="12" />
@@ -62,14 +149,16 @@ export default function WorkoutScreen({ go }) {
             </svg>
           </div>
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent3)' }}>Corrección postural</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent3)' }}>
+              Corrección postural
+            </div>
             <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>
               Baja más la cadera — mantén la espalda recta
             </div>
           </div>
         </div>
 
-        {/* Main actions */}
+        {/* Acciones principales */}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="btn-secondary" style={{ flex: 1 }} onClick={() => go('blind')}>
             Pantalla apagada
@@ -79,31 +168,19 @@ export default function WorkoutScreen({ go }) {
           </button>
         </div>
 
-        {/* End session */}
+        {/* Finalizar sesión */}
         <button
           className="btn-secondary"
-          style={{ width: '100%', borderColor: 'rgba(244,63,94,0.3)', color: '#f43f5e' }}
+          style={{
+            width: '100%',
+            borderColor: 'rgba(244,63,94,0.3)',
+            color: '#f43f5e'
+          }}
           onClick={() => go('history')}
         >
           Finalizar sesión
         </button>
       </div>
     </>
-  )
-}
-
-// ── Stick-figure pose skeleton ─────────────────────────────────────────────
-function PoseSkeleton() {
-  return (
-    <svg width="36" height="60" viewBox="0 0 36 60" fill="none">
-      <circle cx="18" cy="6"  r="4"   stroke="#22d3ee" strokeWidth="1.5" />
-      <line   x1="18" y1="10" x2="18" y2="28" stroke="#22d3ee" strokeWidth="1.5" />
-      <line   x1="18" y1="16" x2="6"  y2="24" stroke="#22d3ee" strokeWidth="1.5" />
-      <line   x1="18" y1="16" x2="30" y2="24" stroke="#22d3ee" strokeWidth="1.5" />
-      <line   x1="18" y1="28" x2="10" y2="48" stroke="#22d3ee" strokeWidth="1.5" />
-      <line   x1="18" y1="28" x2="26" y2="48" stroke="#22d3ee" strokeWidth="1.5" />
-      <circle cx="6"  cy="24" r="2.5" stroke="#22d3ee" strokeWidth="1.2" />
-      <circle cx="30" cy="24" r="2.5" stroke="#22d3ee" strokeWidth="1.2" />
-    </svg>
   )
 }
