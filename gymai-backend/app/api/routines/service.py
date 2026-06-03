@@ -5,8 +5,8 @@ from app.core.prompts import DYNAMIC_FILTER_SYSTEM_PROMPT
 from app.services.llm_service import generate_routine_adaptation 
 
 class RoutineService:
-    def __init__(self):
-        self.repository = RoutineRepository()
+    def __init__(self, repository: RoutineRepository):
+        self.repository = repository
 
     async def process_daily_checkin(self, checkin: CheckInRequest, user_id: int) -> RoutineResponse:
         base_routine = self.repository.get_base_routine(user_id)
