@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 export default function useVoiceCommand() {
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef(null)
-  const isMountedRef = useRef(true) // 🛡️ Escudo contra desmontaje analítico
+  const isMountedRef = useRef(true) // 
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
@@ -40,7 +40,6 @@ export default function useVoiceCommand() {
     }
 
     recognition.onend = () => {
-      // 🛡️ Solo limpia la referencia si pertenece a esta misma sesión activa
       if (recognitionRef.current === recognition) {
         recognitionRef.current = null
       }
@@ -60,7 +59,6 @@ export default function useVoiceCommand() {
       const text = event.results[event.results.length - 1][0].transcript.toLowerCase()
       console.log("IA escuchó:", text)
 
-      // Tu bucle optimizado con extracción de entradas
       for (const [keyword, action] of Object.entries(commandMap)) {
         if (text.includes(keyword)) {
           action()

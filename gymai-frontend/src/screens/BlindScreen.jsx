@@ -9,7 +9,7 @@ export default function BlindScreen({ go }) {
   // Guardamos las referencias de los comandos para que no se pierdan entre renders
   const commandsRef = useRef(null)
 
-  // 🛡️ FUNCIÓN SPEAK OPTIMIZADA: Ahora acepta un callback opcional para cuando termine de hablar
+
   const speak = (text, onComplete = null) => {
     window.speechSynthesis.cancel() // Limpia colas previas
 

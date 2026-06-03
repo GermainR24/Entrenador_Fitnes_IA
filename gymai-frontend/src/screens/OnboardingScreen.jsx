@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import useVoiceCommand from '../hooks/useVoiceCommand'
 
 export default function OnboardingScreen({ go }) {
-  // 🟢 Corregido: Solo traemos las funciones reales que exporta tu hook
   const { isListening, listenForCommands, stopListening } = useVoiceCommand()
 
   useEffect(() => {
