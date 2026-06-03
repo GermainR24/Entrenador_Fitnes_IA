@@ -323,7 +323,7 @@ const HombreFrontal = ({
   onMuscleClick,
   highlightColor = '#f97316',
   width = '100%',
-  height = 'auto',
+  height = '100%', // auto
   className,
   ariaLabel,
   interactive = true,

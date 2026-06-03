@@ -1,8 +1,11 @@
-import { useState } from 'react'
+// screens/LoginScreen.jsx
+import { useState, useEffect } from 'react'
+import useVoiceCommand from '../hooks/useVoiceCommand'
 
 export default function LoginScreen({ go }) {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
+  const { isListening, listenForCommands, stopListening } = useVoiceCommand()
 
   const inputStyle = {
     width: '100%',
@@ -16,12 +19,66 @@ export default function LoginScreen({ go }) {
     fontFamily: "'DM Sans', sans-serif",
   }
 
+  // Función para rellenar datos de demostración (útil para pruebas rápidas)
+  const fillDemo = () => {
+    setEmail('demo@gymai.com')
+    setPassword('demo1234')
+  }
+
+  const clearFields = () => {
+    setEmail('')
+    setPassword('')
+  }
+
+  useEffect(() => {
+    const commands = {
+      // Navegación
+      'iniciar sesión': () => go('dashboard'),
+      'entrar': () => go('dashboard'),
+      'login': () => go('dashboard'),
+      'registrarme': () => go('register'),
+      'registro': () => go('register'),
+      'volver': () => go('onboarding'),
+      'atrás': () => go('onboarding'),
+      'inicio': () => go('onboarding'),
+
+      // Utilidades de formulario (solo para demo/desarrollo)
+      'demo': () => fillDemo(),
+      'llenar demo': () => fillDemo(),
+      'limpiar': () => clearFields(),
+      'borrar': () => clearFields(),
+    }
+
+    listenForCommands(commands, true) // modo continuo
+    return () => stopListening()
+  }, [listenForCommands, stopListening, go])
+
   return (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       padding: '24px', gap: '24px',
     }}>
+      {/* Indicador de micrófono activo (arriba a la derecha) */}
+      {isListening && (
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          background: '#22c55e',
+          borderRadius: '20px',
+          padding: '4px 12px',
+          fontSize: '11px',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          zIndex: 10,
+        }}>
+          <span>🎤</span> Escuchando
+        </div>
+      )}
+
       {/* Logo */}
       <div style={{ textAlign: 'center' }}>
         <div style={{
@@ -42,7 +99,7 @@ export default function LoginScreen({ go }) {
         </p>
       </div>
 
-      {/* Form */}
+      {/* Formulario */}
       <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '24px', width: '100%', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div>
           <label className="label" style={{ display: 'block', marginBottom: '8px' }}>Email</label>
@@ -76,6 +133,21 @@ export default function LoginScreen({ go }) {
       <button className="btn-ghost" onClick={() => go('onboarding')}>
         ← Volver al inicio
       </button>
+
+      {/* Ayuda de comandos (opcional, aparece solo si el micrófono está activo) */}
+      {isListening && (
+        <div style={{
+          fontSize: '10px',
+          color: 'var(--text3)',
+          textAlign: 'center',
+          marginTop: '8px',
+          padding: '6px 12px',
+          background: 'rgba(0,0,0,0.3)',
+          borderRadius: '20px',
+        }}>
+          🗣️ Di: "iniciar sesión", "registrarme", "demo", "limpiar" o "volver"
+        </div>
+      )}
     </div>
   )
 }

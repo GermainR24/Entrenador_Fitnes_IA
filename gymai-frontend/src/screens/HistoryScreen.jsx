@@ -1,9 +1,11 @@
-import { useState } from 'react'
+// screens/HistoryScreen.jsx
+import { useState, useEffect } from 'react'
 import ProgressChart from '../components/svg/ProgressChart.jsx'
 import HombreFrontal from '../components/svg/HombreFrontal.jsx'
 import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
+import useVoiceCommand from '../hooks/useVoiceCommand'
 
-// Chart data per exercise
+// Datos de ejercicios y gráficos (igual que antes)
 const EXERCISES = [
   'Press de banca',
   'Sentadilla hack',
@@ -22,29 +24,75 @@ const CHART_POINTS = [
 
 export default function HistoryScreen({ go }) {
   const [exIdx, setExIdx] = useState(0)
+  const { isListening, listenForCommands, stopListening } = useVoiceCommand()
 
-  function changeExercise(delta) {
+  // Cambiar ejercicio (manual o por voz)
+  const changeExercise = (delta) => {
     setExIdx(prev => (prev + delta + EXERCISES.length) % EXERCISES.length)
   }
 
+  useEffect(() => {
+    // Definir comandos de voz para la pantalla de historial
+    const commands = {
+      'volver': () => go('dashboard'),
+      'atrás': () => go('dashboard'),
+      'dashboard': () => go('dashboard'),
+      'siguiente ejercicio': () => changeExercise(1),
+      'siguiente': () => changeExercise(1),
+      'anterior ejercicio': () => changeExercise(-1),
+      'anterior': () => changeExercise(-1),
+      'inicio': () => go('dashboard'),
+      'menú principal': () => go('dashboard'),
+    }
+
+    // Modo continuo
+    listenForCommands(commands, true)
+
+    // Limpiar al desmontar
+    return () => stopListening()
+  }, [listenForCommands, stopListening, go])  // 'changeExercise' estable por usar setExIdx
+
   return (
     <>
+      {/* Barra superior con indicador de micrófono */}
       <div className="nav-bar">
         <button className="back-btn" onClick={() => go('dashboard')}>← Volver</button>
         <span style={{ fontFamily: "'Syne', sans-serif", fontSize: '16px', fontWeight: 700 }}>
           Historial
         </span>
+        {isListening && (
+          <span style={{
+            marginLeft: 'auto',
+            backgroundColor: '#22c55e',
+            borderRadius: '20px',
+            padding: '2px 10px',
+            fontSize: '10px',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}>
+            <span>🎤</span> Escuchando
+          </span>
+        )}
       </div>
 
       <div className="screen-body">
-        {/* Stats row */}
+        {/* Indicador de comandos disponibles (opcional) */}
+        {isListening && (
+          <p style={{ fontSize: '11px', color: '#4ade80', marginTop: '-8px', marginBottom: '8px' }}>
+            🗣️ Comandos: "siguiente ejercicio", "anterior", "volver", "inicio"
+          </p>
+        )}
+
+        {/* Tarjetas de estadísticas */}
         <div style={{ display: 'flex', gap: '10px' }}>
           <StatCard value="24"   label="Sesiones"  color="74,222,128"  />
           <StatCard value="+18%" label="Progreso"  color="34,211,238"  />
           <StatCard value="7🔥"  label="Racha"     color="245,158,11"  />
         </div>
 
-        {/* Progress chart */}
+        {/* Gráfico de progreso */}
         <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div>
@@ -76,7 +124,7 @@ export default function HistoryScreen({ go }) {
           </div>
         </div>
 
-        {/* Cumulative muscle map */}
+        {/* Mapa muscular acumulado */}
         <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px', textAlign: 'center' }}>
           <div className="label" style={{ marginBottom: '8px' }}>Volumen muscular acumulado</div>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -87,7 +135,7 @@ export default function HistoryScreen({ go }) {
           </div>
         </div>
 
-        {/* XP achievement */}
+        {/* Logro XP */}
         <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '16px', textAlign: 'center', borderColor: 'rgba(74,222,128,0.3)' }}>
           <div style={{ fontSize: '24px', marginBottom: '6px' }}>🏆</div>
           <div style={{ fontFamily: "'Syne', sans-serif", fontSize: '14px', fontWeight: 700, color: 'var(--accent)' }}>
@@ -106,7 +154,7 @@ export default function HistoryScreen({ go }) {
   )
 }
 
-// ── Stat card sub-component ──────────────────────────────────────────────────
+// Componente de tarjeta de estadística (sin cambios)
 function StatCard({ value, label, color }) {
   return (
     <div style={{

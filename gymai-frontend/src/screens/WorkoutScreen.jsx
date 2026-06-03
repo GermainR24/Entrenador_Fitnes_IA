@@ -3,15 +3,49 @@ import HombreFrontal from '../components/svg/HombreFrontal.jsx'
 import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
 import WaveAudio from '../components/shared/WaveAudio.jsx'
 import useMediaPipe from '../hooks/useMediaPipe.js'
+import useVoiceCommand from '../hooks/useVoiceCommand.js'   // ← Importamos el hook de voz
 
 export default function WorkoutScreen({ go }) {
   const { videoRef, canvasRef, startCamera, stopCamera, error } = useMediaPipe()
+  const { isListening, listenForCommands, stopListening } = useVoiceCommand()
 
-  // Inicia la cámara al montar, la detiene al desmontar
+  // Inicia la cámara y el reconocimiento de voz al montar, lo detiene al desmontar
   useEffect(() => {
     startCamera()
-    return () => stopCamera()
-  }, [startCamera, stopCamera])
+
+    // Definir comandos de voz específicos para la pantalla de entrenamiento
+    // Dentro del useEffect en WorkoutScreen.jsx
+    const commands = {
+      // Coincide con el botón verde "Terminé serie"
+      'terminé': () => go('rest'),
+      'serie': () => go('rest'),
+      'siguiente': () => go('rest'),
+
+      // Coincide con el botón rojo "Finalizar sesión" (Evitamos 'terminar' por seguridad)
+      'finalizar': () => go('history'),
+      'finalizar sesión': () => go('history'),
+
+      // Coincide con las acciones secundarias
+      'pausa': () => console.log('Pausar repetición...'),
+      'continuar': () => console.log('Continuar repetición...'),
+      
+      // Coincide con el botón "Pantalla apagada"
+      'apagar': () => go('blind'),
+      'pantalla apagada': () => go('blind'),
+
+      // Coincide con el botón superior "← Volver"
+      'volver': () => go('scan'),
+      'atrás': () => go('scan')
+    }
+
+    // Escucha continua (true) para poder dar varios comandos seguidos
+    listenForCommands(commands, true)
+
+    return () => {
+      stopCamera()
+      stopListening()   // Apaga el micrófono al salir
+    }
+  }, [startCamera, listenForCommands, stopCamera, stopListening, go])
 
   return (
     <>
@@ -23,6 +57,28 @@ export default function WorkoutScreen({ go }) {
         </span>
         <span className="badge badge-green">En vivo</span>
       </div>
+
+      {/* Indicador flotante de micrófono activo */}
+      {isListening && (
+        <div style={{
+          position: 'fixed',
+          bottom: 20,
+          right: 20,
+          background: '#22c55e',
+          color: 'white',
+          borderRadius: '999px',
+          padding: '8px 16px',
+          fontSize: '12px',
+          fontWeight: 'bold',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+        }}>
+          <span>🎤</span> Escuchando...
+        </div>
+      )}
 
       <div className="screen-body">
         {/* Título del ejercicio */}
@@ -164,7 +220,7 @@ export default function WorkoutScreen({ go }) {
             Pantalla apagada
           </button>
           <button className="btn-primary" style={{ flex: 1 }} onClick={() => go('rest')}>
-            Terminé serie →
+            Termine serie →
           </button>
         </div>
 

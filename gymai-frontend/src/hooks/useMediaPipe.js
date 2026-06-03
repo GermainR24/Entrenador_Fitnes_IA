@@ -12,61 +12,50 @@ export default function useMediaPipe() {
   const isActiveRef = useRef(false)
   const lastFrameTimeRef = useRef(0)
   const isMountedRef = useRef(true)
-  
-  // Referencia dedicada para limpiar el evento de pestañas ocultas
+  const isModelReadyRef = useRef(false)   // <<< NUEVO: indica si el modelo ya cargó
+
   const visibilityHandlerRef = useRef(null)
 
   const [isActive, setIsActive] = useState(false)
   const [error, setError] = useState(null)
 
   const stopCamera = useCallback(() => {
-    // 1. Frenamos el bucle de procesamiento de inmediato
     isActiveRef.current = false
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
     }
-
-    // 2. Limpieza del evento de visibilidad del navegador
     if (visibilityHandlerRef.current) {
       document.removeEventListener('visibilitychange', visibilityHandlerRef.current)
       visibilityHandlerRef.current = null
     }
-
-    // 3. Apagar el hardware real (Garantiza apagar la luz de la webcam)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
     }
-    
     if (videoRef.current) {
       videoRef.current.srcObject = null
     }
-    
-    // 4. Destruir la instancia de MediaPipe para liberar memoria RAM
     if (mpPoseRef.current) {
       mpPoseRef.current.close()
       mpPoseRef.current = null
     }
-    
     if (canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d')
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
     }
-
-    // 5. Modificar estados de React SÓLO si el componente sigue vivo en pantalla
     if (isMountedRef.current) {
       setIsActive(false)
       setError(null)
     }
+    isModelReadyRef.current = false
   }, [])
 
   const startCamera = useCallback(async () => {
-    if (isActiveRef.current) {
-      stopCamera()
-    }
-
+    if (isActiveRef.current) stopCamera()
     setError(null)
+    isModelReadyRef.current = false
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' }
@@ -95,6 +84,7 @@ export default function useMediaPipe() {
         minTrackingConfidence: 0.5
       })
 
+      // Una vez que se recibe el primer resultado sin error, marcamos el modelo como listo
       pose.onResults((results) => {
         if (!canvasRef.current || !videoRef.current || !isActiveRef.current) return
         const canvas = canvasRef.current
@@ -115,18 +105,27 @@ export default function useMediaPipe() {
                         { color: '#ffffff', lineWidth: 1, radius: 2 })
         }
         ctx.restore()
+
+        // Marcar como listo al primer resultado válido
+        if (!isModelReadyRef.current && results.poseLandmarks) {
+          isModelReadyRef.current = true
+          console.log("Modelo MediaPipe listo")
+        }
       })
       
       mpPoseRef.current = pose
 
-      // Bucle de procesamiento limitado a ~30 FPS (Aprox. 33ms por frame)
+      // Bucle de procesamiento: solo enviamos frames si el modelo está listo
       const procesarFrame = async (now) => {
         if (!isActiveRef.current) return
 
         if (now - lastFrameTimeRef.current >= 33) {
           lastFrameTimeRef.current = now
           
-          if (videoRef.current && videoRef.current.readyState >= 2) {
+          // Verificar que el video tenga dimensiones reales y el modelo listo
+          if (videoRef.current && videoRef.current.readyState >= 2 && 
+              videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0 &&
+              isModelReadyRef.current) {
             try {
               await pose.send({ image: videoRef.current })
             } catch (poseErr) {
@@ -141,11 +140,18 @@ export default function useMediaPipe() {
       lastFrameTimeRef.current = performance.now()
       animationFrameRef.current = requestAnimationFrame(procesarFrame)
 
-      // Manejo limpio del estado de visibilidad guardado en la referencia
+      // (Opcional) Esperar un tiempo máximo de 4 segundos para forzar el modelo listo
+      // en caso de que nunca llegue el evento onResults (por ejemplo, fallo de carga)
+      setTimeout(() => {
+        if (!isModelReadyRef.current && isActiveRef.current) {
+          console.warn("Timeout: forzando modelo como listo")
+          isModelReadyRef.current = true
+        }
+      }, 4000)
+
       const handleVisibilityChange = () => {
         if (document.hidden && isActiveRef.current) {
-          // Comportamiento opcional si deseas pausar al minimizar la pestaña
-          // stopCamera()
+          // podrías pausar la cámara si lo deseas
         }
       }
       document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -164,8 +170,8 @@ export default function useMediaPipe() {
   useEffect(() => {
     isMountedRef.current = true
     return () => {
-      isMountedRef.current = false // Cambia el flag de renderizado
-      stopCamera()                 // Ejecuta toda la desconexión de hardware sin trabas
+      isMountedRef.current = false
+      stopCamera()
     }
   }, [stopCamera])
 

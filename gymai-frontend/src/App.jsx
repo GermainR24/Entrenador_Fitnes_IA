@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { HashRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 
 // Screens
 import OnboardingScreen from './screens/OnboardingScreen.jsx'
@@ -16,7 +17,7 @@ import BlindScreen      from './screens/BlindScreen.jsx'
 // Shared components
 import BottomNav from './components/shared/BottomNav.jsx'
 
-// ─── Screen registry ──────────────────────────────────────────────────────────
+// ─── Registro de pantallas oficiales ──────────────────────────────────────────
 const SCREENS = [
   { id: 'onboarding', label: 'Inicio',     Component: OnboardingScreen },
   { id: 'login',      label: 'Login',      Component: LoginScreen      },
@@ -31,30 +32,60 @@ const SCREENS = [
   { id: 'blind',      label: 'Ciego',      Component: BlindScreen      },
 ]
 
-// ─── App ──────────────────────────────────────────────────────────────────────
-export default function App() {
+// ─── Manejador de enrutamiento nativo e historial ──────────────────────────────
+function AppRouter() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const [currentScreen, setCurrentScreen] = useState('onboarding')
 
-  // Single navigation function replaces go() from vanilla JS
-  const go = (screenId) => setCurrentScreen(screenId)
+  // Sincronizar el historial del dispositivo con el estado de React
+  useEffect(() => {
+    const path = location.pathname.substring(1)
+    if (path && SCREENS.some(s => s.id === path)) {
+      setCurrentScreen(path)
+    } else {
+      setCurrentScreen('onboarding')
+      navigate('/onboarding', { replace: true })
+    }
+  }, [location, navigate])
 
-  // Find the active screen entry
+  // Función puente go() que actualiza tanto la URL como la memoria
+  const go = (screenId) => {
+    setCurrentScreen(screenId)
+    navigate(`/${screenId}`)
+  }
+
   const active = SCREENS.find(s => s.id === currentScreen)
   const { Component } = active
+  const pantallasSinNavbar = ['onboarding', 'login', 'register', 'blind']
+  const mostrarNavbar = !pantallasSinNavbar.includes(currentScreen)
+
 
   return (
-    <div className="wrapper">
-      {/* Active screen — key forces re-mount (and fadeIn animation) on navigate */}
-      <div className="screen" key={currentScreen}>
+    <div className="wrapper" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      
+      {/* Contenedor dinámico de pantalla */}
+      <div className="screen" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <Component go={go} />
       </div>
-
-      {/* Prototype tab bar — replaces the HTML tab-bar */}
-      <BottomNav
-        screens={SCREENS}
-        currentScreen={currentScreen}
-        go={go}
-      />
+      
+      {mostrarNavbar && (
+        <BottomNav
+          screens={SCREENS}
+          currentScreen={currentScreen}
+          go={go}
+        />
+      )}
+      
     </div>
+  )
+}
+
+// ─── Componente raíz global ─────────────────────────────────────────────────────
+export default function App() {
+  return (
+    <HashRouter>
+      <AppRouter />
+    </HashRouter>
   )
 }

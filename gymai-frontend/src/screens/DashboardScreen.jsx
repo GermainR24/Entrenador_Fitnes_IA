@@ -1,10 +1,34 @@
+// screens/DashboardScreen.jsx
+import { useEffect } from 'react'
 import HombreFrontal from '../components/svg/HombreFrontal.jsx'
 import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
+import useVoiceCommand from '../hooks/useVoiceCommand'
 
 export default function DashboardScreen({ go }) {
+  const { isListening, listenForCommands, stopListening } = useVoiceCommand()
+
+  useEffect(() => {
+    // Comandos de voz para el dashboard
+    const commands = {
+      'iniciar rutina': () => go('planner'),
+      'rutina': () => go('planner'),
+      'comenzar': () => go('planner'),
+      'progreso': () => go('history'),
+      'historial': () => go('history'),
+      'mi semana': () => go('weekly'),
+      'semana': () => go('weekly'),
+      'perfil': () => console.log('Abrir perfil (implementar)'),
+      'nivel': () => console.log('Mostrar detalles del nivel'),
+      'fatiga': () => console.log('Mostrar detalles de fatiga'),
+    }
+
+    listenForCommands(commands, false) // modo continuo
+    return () => stopListening()
+  }, [listenForCommands, stopListening, go])
+
   return (
     <>
-      {/* Nav bar */}
+      {/* Barra superior con indicador de micrófono */}
       <div className="nav-bar">
         <div>
           <div className="label">Bienvenido de vuelta</div>
@@ -18,19 +42,33 @@ export default function DashboardScreen({ go }) {
             width: '34px', height: '34px', borderRadius: '50%',
             background: 'rgba(74,222,128,0.15)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            position: 'relative'
           }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2">
               <circle cx="12" cy="8" r="4" />
               <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
             </svg>
+            {isListening && (
+              <span style={{
+                position: 'absolute', bottom: -2, right: -2,
+                width: 8, height: 8, borderRadius: '50%',
+                backgroundColor: '#22c55e', border: '1px solid white'
+              }} />
+            )}
           </div>
         </div>
       </div>
 
-      {/* Body */}
+      {/* Cuerpo */}
       <div className="screen-body">
+        {/* Indicador de voz opcional en texto */}
+        {isListening && (
+          <p style={{ fontSize: '11px', color: '#4ade80', marginTop: '-8px', marginBottom: '8px' }}>
+            🎤 Escuchando comandos: "iniciar rutina", "progreso", "mi semana"
+          </p>
+        )}
 
-        {/* Readiness card */}
+        {/* Card de preparación diaria */}
         <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ flex: 1 }}>
             <div className="label" style={{ marginBottom: '4px' }}>Preparación diaria</div>
@@ -43,7 +81,7 @@ export default function DashboardScreen({ go }) {
             </div>
           </div>
 
-          {/* Readiness ring */}
+          {/* Anillo de readiness */}
           <div style={{ position: 'relative', width: '70px', height: '70px' }}>
             <svg width="70" height="70" viewBox="0 0 70 70" style={{ transform: 'rotate(-90deg)' }}>
               <circle cx="35" cy="35" r="28" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
@@ -68,7 +106,7 @@ export default function DashboardScreen({ go }) {
           </div>
         </div>
 
-        {/* Fatigue muscle map */}
+        {/* Mapa de fatiga muscular */}
         <div>
           <div className="label" style={{ marginBottom: '8px' }}>Fatiga residual — hoy</div>
           <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -84,7 +122,7 @@ export default function DashboardScreen({ go }) {
           </div>
         </div>
 
-        {/* XP bar */}
+        {/* Barra de XP */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
             <div className="label">XP — Nivel 12</div>
@@ -95,7 +133,7 @@ export default function DashboardScreen({ go }) {
           </div>
         </div>
 
-        {/* CTA buttons */}
+        {/* Botones de acción */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
           <button
             className="btn-primary"
@@ -123,7 +161,7 @@ export default function DashboardScreen({ go }) {
   )
 }
 
-// ── tiny helper ──────────────────────────────────────────────────────────────
+// Componente auxiliar de leyenda (igual que antes)
 function Legend({ color, label }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

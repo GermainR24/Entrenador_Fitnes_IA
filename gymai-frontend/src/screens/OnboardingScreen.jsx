@@ -1,7 +1,39 @@
+import { useEffect } from 'react'
+import useVoiceCommand from '../hooks/useVoiceCommand'
+
 export default function OnboardingScreen({ go }) {
+  // 🟢 Corregido: Solo traemos las funciones reales que exporta tu hook
+  const { isListening, listenForCommands, stopListening } = useVoiceCommand()
+
+  useEffect(() => {
+    // Definir comandos de voz inteligentes para la selección de perfil
+    const commands = {
+      'estándar': () => go('dashboard'),
+      'estandar': () => go('dashboard'), // Salvavidas sin tilde
+      'normal': () => go('dashboard'),
+      
+      'accesibilidad': () => go('blind'),
+      'visual': () => go('blind'),
+      'ciego': () => go('blind'), // Añadido por intuición directa
+      
+      'movilidad': () => go('dashboard'),
+      'bajo impacto': () => go('dashboard'),
+      
+      'iniciar sesión': () => go('login'),
+      'login': () => go('login'),
+      'ya tengo cuenta': () => go('login'),
+    }
+
+    // El micrófono se abrirá y pedirá permisos nativos automáticamente aquí:
+    listenForCommands(commands, true)
+
+    // Detener de forma limpia al desmontar para no dejar hilos abiertos
+    return () => stopListening()
+  }, [listenForCommands, stopListening, go])
+
   return (
     <>
-      {/* Header */}
+      {/* Barra superior con indicador de micrófono */}
       <div className="nav-bar" style={{ border: 'none' }}>
         <div>
           <div className="label">GymAI · MVP</div>
@@ -13,21 +45,30 @@ export default function OnboardingScreen({ go }) {
           width: '38px', height: '38px', borderRadius: '50%',
           background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'relative'
         }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <path d="M8 12l2.5 2.5L16 9" />
           </svg>
+          {isListening && (
+            <span style={{
+              position: 'absolute', bottom: -2, right: -2,
+              width: 10, height: 10, borderRadius: '50%',
+              backgroundColor: '#22c55e', border: '1px solid white'
+            }} />
+          )}
         </div>
       </div>
 
-      {/* Body */}
+      {/* Cuerpo */}
       <div className="screen-body">
         <p style={{ fontSize: '13px', color: 'var(--text3)' }}>
           Elige tu perfil de accesibilidad para personalizar toda la experiencia.
+          {isListening && <span style={{ color: '#4ade80', marginLeft: '6px' }}>🎤 Escuchando comandos...</span>}
         </p>
 
-        {/* Perfil estándar — highlighted / recommended */}
+        {/* Perfil estándar */}
         <div className="card-option highlighted" onClick={() => go('dashboard')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div
@@ -98,6 +139,7 @@ export default function OnboardingScreen({ go }) {
           </div>
         </div>
 
+        {/* Enlace a login */}
         <div style={{ textAlign: 'center', marginTop: '8px' }}>
           <button className="btn-ghost" onClick={() => go('login')}>
             Ya tengo cuenta → Iniciar sesión

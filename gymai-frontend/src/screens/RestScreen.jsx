@@ -1,55 +1,106 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import TimerCircle from '../components/svg/TimerCircle.jsx'
+import useVoiceCommand from '../hooks/useVoiceCommand'
 
 const MAX_SECONDS = 120
 
 export default function RestScreen({ go }) {
   const [restSeconds, setRestSeconds] = useState(MAX_SECONDS)
+  const { isListening, listenForCommands, stopListening } = useVoiceCommand()
 
-  // Start timer on mount, clear on unmount
+  // Ajustar temporizador manualmente
+  const adjustTimer = (delta) => {
+    setRestSeconds(prev => Math.max(10, Math.min(prev + delta, MAX_SECONDS)))
+  }
+
+  // Saltar el descanso
+  const skipRest = () => {
+    go('workout')
+  }
+
+  // 🛡️ ESCUDO MUTABLE: Mantiene las funciones frescas cada segundo 
+  // sin forzar al micrófono a reiniciarse jamás.
+  const actionsRef = useRef({ adjustTimer, skipRest, setRestSeconds })
+  actionsRef.current = { adjustTimer, skipRest, setRestSeconds }
+
+  // Temporizador automático de la serie
   useEffect(() => {
     const id = setInterval(() => {
       setRestSeconds(prev => {
         if (prev <= 1) {
           clearInterval(id)
-          // Navigate to workout when time is up (deferred to avoid state-in-render)
-          setTimeout(() => go('workout'), 0)
+          setTimeout(() => actionsRef.current.skipRest(), 0)
           return 0
         }
         return prev - 1
       })
     }, 1000)
 
-    return () => clearInterval(id) // cleanup on unmount
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => clearInterval(id)
+  }, []) 
 
-  // Adjust timer with ±30s buttons
-  function adjustTimer(delta) {
-    setRestSeconds(prev => Math.max(10, prev + delta))
-  }
-
-  // Format seconds → "m:ss"
+  // Formato mm:ss
   const m = Math.floor(restSeconds / 60)
   const s = restSeconds % 60
   const label = `${m}:${s < 10 ? '0' : ''}${s}`
 
+  // ── Comandos de Voz Blindados ──────────────────────────────────────────────
+  useEffect(() => {
+    const commands = {
+      // Navegación instantánea
+      'saltar descanso': () => actionsRef.current.skipRest(),
+      'saltar': () => actionsRef.current.skipRest(),
+      'siguiente ejercicio': () => actionsRef.current.skipRest(),
+      'terminar descanso': () => actionsRef.current.skipRest(),
+
+      // Incrementos de tiempo
+      'más tiempo': () => actionsRef.current.adjustTimer(30),
+      'añadir tiempo': () => actionsRef.current.adjustTimer(30),
+      'subir tiempo': () => actionsRef.current.adjustTimer(30),
+      '+30 segundos': () => actionsRef.current.adjustTimer(30),
+
+      // Decrementos de tiempo
+      'menos tiempo': () => actionsRef.current.adjustTimer(-30),
+      'quitar tiempo': () => actionsRef.current.adjustTimer(-30),
+      'bajar tiempo': () => actionsRef.current.adjustTimer(-30),
+      '-30 segundos': () => actionsRef.current.adjustTimer(-30),
+
+      // Reinicios del contador
+      'reiniciar descanso': () => actionsRef.current.setRestSeconds(MAX_SECONDS),
+      'reiniciar': () => actionsRef.current.setRestSeconds(MAX_SECONDS),
+      'dos minutos': () => actionsRef.current.setRestSeconds(120),
+
+      'volver': () => go('workout'),
+      'atrás': () => go('workout'),
+    }
+
+    // Modo continuo (true) ideal para interactuar con el reloj varias veces
+    listenForCommands(commands, true)
+    return () => stopListening()
+  }, [listenForCommands, stopListening, go]) 
+
   return (
     <>
+      {/* Barra superior con indicador de micrófono */}
       <div className="nav-bar">
         <button className="back-btn" onClick={() => go('workout')}>← Volver</button>
         <span style={{ fontFamily: "'Syne', sans-serif", fontSize: '16px', fontWeight: 700 }}>
           Descanso activo
         </span>
+        {isListening && (
+          <span style={{ marginLeft: 'auto', backgroundColor: '#22c55e', borderRadius: '20px', padding: '2px 10px', fontSize: '10px', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span>🎤</span> Escuchando
+          </span>
+        )}
       </div>
 
       <div className="screen-body" style={{ alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', width: '100%' }}>
-          {/* Next exercise header */}
           <div className="label" style={{ marginBottom: '16px', textAlign: 'center' }}>
             Siguiente ejercicio
           </div>
 
-          {/* Next exercise card */}
+          {/* Tarjeta del ejercicio */}
           <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '20px', marginBottom: '24px', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '10px', width: '100%' }}>
             <div style={{ fontFamily: "'Syne', sans-serif", fontSize: '16px', fontWeight: 700 }}>
               Press Inclinado Mancuernas
@@ -65,7 +116,7 @@ export default function RestScreen({ go }) {
             <div style={{ fontSize: '12px', color: 'var(--text3)' }}>3 × 10–12 reps · 28 kg</div>
           </div>
 
-          {/* Circular timer */}
+          {/* Temporizador circular */}
           <div style={{ marginBottom: '24px' }}>
             <TimerCircle
               seconds={restSeconds}
@@ -74,18 +125,21 @@ export default function RestScreen({ go }) {
             />
           </div>
 
-          {/* Controls */}
+          {/* Controles táctiles */}
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
             <button className="btn-secondary" onClick={() => adjustTimer(-30)}>−30s</button>
-            <button
-              className="btn-primary"
-              style={{ width: 'auto', padding: '14px 28px' }}
-              onClick={() => go('workout')}
-            >
+            <button className="btn-primary" style={{ width: 'auto', padding: '14px 28px' }} onClick={skipRest}>
               Saltar descanso
             </button>
             <button className="btn-secondary" onClick={() => adjustTimer(30)}>+30s</button>
           </div>
+
+          {/* Glosario de ayuda */}
+          {isListening && (
+            <div style={{ marginTop: '20px', fontSize: '10px', color: 'var(--text3)', background: 'rgba(0,0,0,0.2)', padding: '6px 12px', borderRadius: '20px', display: 'inline-block' }}>
+              🗣️ Comandos: "saltar descanso", "más tiempo", "menos tiempo", "reiniciar", "volver"
+            </div>
+          )}
         </div>
       </div>
     </>
