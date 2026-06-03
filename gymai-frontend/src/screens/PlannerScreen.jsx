@@ -29,12 +29,32 @@ export default function PlannerScreen({ go }) {
   const [painZones, setPainZones] = useState(new Set())
   const [routine, setRoutine] = useState(DEFAULT_ROUTINE)
   
-  // 🟢 Nuevos estados para la conexión con el Backend de FastAPI
   const [loading, setLoading] = useState(false)
   const [aiFeedback, setAiFeedback] = useState(null)
   const [errorApi, setErrorApi] = useState(null)
 
   const { isListening, listenForCommands, stopListening } = useVoiceCommand()
+  const commandsRef = useRef(null)
+
+  // ──  SISTEMA DE SÍNTESIS DE VOZ BLINDADO ──────────────────────────────────
+  const speak = useCallback((text, onComplete = null) => {
+    window.speechSynthesis.cancel() // Mata cualquier voz previa
+    stopListening() // 👈 Silencia el micrófono de inmediato para evitar el eco
+
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'es-PE'
+    utterance.rate = 0.98
+
+    utterance.onend = () => {
+      if (onComplete) {
+        onComplete()
+      } else if (commandsRef.current) {
+        // Al terminar de hablar, reactiva el micrófono con los comandos actuales
+        listenForCommands(commandsRef.current, true)
+      }
+    }
+    window.speechSynthesis.speak(utterance)
+  }, [listenForCommands, stopListening])
 
   const addPainZone = useCallback((slug) => {
     setPainZones(prev => new Set([...prev, slug]))
@@ -58,17 +78,17 @@ export default function PlannerScreen({ go }) {
 
   const clearPainZones = useCallback(() => setPainZones(new Set()), [])
 
-  // ── 🚀 NUEVA FUNCIÓN: Conexión asíncrona con el Servidor FastAPI ────────────────
+  
+  // ──  FUNCIÓN ACTUALIZADA CON LECTURA DE LISTA DE EJERCICIOS ────────────────
   const generarRutinaAdaptada = useCallback(async () => {
     setLoading(true)
     setErrorApi(null)
     try {
       const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
       
-      // Construimos el body exacto que espera tu CheckInRequest de SQLModel
       const payload = {
         feel_value: feelVal,
-        pain_zones: [...painZones] // Convertimos el Set de React a un Array plano de strings
+        pain_zones: [...painZones]
       }
 
       const response = await fetch(`${API_BASE}/routines/adapt`, {
@@ -81,24 +101,54 @@ export default function PlannerScreen({ go }) {
         throw new Error('No se pudo obtener la rutina adaptada del servidor.')
       }
 
-      const data = await response.json() // Mapea a RoutineResponse
+      const data = await response.json()
       
-      setRoutine(data.exercises)   // Reemplaza la rutina estática por la calculada por el LLM
-      setAiFeedback(data.ai_feedback) // Almacena el mensaje explicativo de la IA
+      setRoutine(data.exercises)   
+      setAiFeedback(data.ai_feedback) 
+
+      //  1. CONSTRUIR EL TEXTO AUDIBLE DE LOS EJERCICIOS
+      // Convertimos los símbolos técnicos (4 × 8-10 reps) a palabras fluidas en español
+      const ejerciciosHablados = data.exercises.map((ex, i) => {
+        const textoBase = ex.sets_description || ex.sets || '';
+        const textoFormateado = textoBase
+          .replace(/×/g, 'series de') // Cambia el símbolo × por la palabra "series de"
+          .replace(/–/g, 'a')         // Cambia el guion largo por "a" (ej. 8 a 10)
+          .replace(/-/g, 'a')         // Por si viene guion normal
+          .replace(/reps/g, 'repeticiones'); // Cambia reps por "repeticiones"
+
+        return `Ejercicio ${i + 1}: ${ex.name}. Te tocan ${textoFormateado}.`;
+      }).join(' ');
+
+      // 🎙️ 2. ORQUESTAR LA AUDIO-GUÍA COMPLETA
+      const mensajeFeedback = data.ai_feedback || 'Tu rutina ha sido adaptada con éxito.';
+      
+      // Concatenamos el análisis de la IA junto con la lectura ordenada de tu tabla
+      speak(`${mensajeFeedback} A continuación, te dicto tu lista de entrenamiento: ${ejerciciosHablados} Di "aceptar" para iniciar.`);
+
     } catch (err) {
       setErrorApi(err.message || 'Error de comunicación con el backend.')
+      speak('Hubo un error de conexión con el servidor de inteligencia artificial.')
     } finally {
       setLoading(false)
     }
-  }, [feelVal, painZones])
+  }, [feelVal, painZones, speak])
 
   const hasPain = painZones.size > 0
 
-  // Guardamos las referencias mutables para evitar re-renders del micrófono
+  // Guardamos las referencias mutables estables para los cierres del hook de voz
   const actionsRef = useRef(null)
   actionsRef.current = { generarRutinaAdaptada, go, addPainZone, removePainZone, clearPainZones }
 
-  // ── Comandos de Voz ─────────────────────────────────────────────────────────
+  // 1. Mensaje de bienvenida audible al montar la pantalla por primera vez
+  useEffect(() => {
+    speak('Bienvenido a tu check-in diario. Tu rutina base hoy es Pecho y Tríceps. Ajusta tu energía o indícame qué músculos te molestan antes de entrenar.')
+    
+    return () => {
+      window.speechSynthesis.cancel() // Cancela el habla si el usuario cambia de pantalla rápido
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 2. Orquestador dinámico de Comandos de Voz
   useEffect(() => {
     const commands = {
       'volver': () => actionsRef.current.go('dashboard'),
@@ -109,7 +159,6 @@ export default function PlannerScreen({ go }) {
       'entrenar': () => actionsRef.current.go('scan'),
       'empezar': () => actionsRef.current.go('scan'),
       
-      // Comandos de voz mapeados a la nueva función asíncrona del backend
       'generar rutina': () => actionsRef.current.generarRutinaAdaptada(),
       'actualizar rutina': () => actionsRef.current.generarRutinaAdaptada(),
       'calcular': () => actionsRef.current.generarRutinaAdaptada(),
@@ -139,7 +188,10 @@ export default function PlannerScreen({ go }) {
       commands[`nivel ${i}`] = () => setFeelVal(i)
     }
 
+    commandsRef.current = commands
+    // Iniciamos la escucha del micrófono una vez definidos los comandos
     listenForCommands(commands, true)
+    
     return () => stopListening()
   }, [listenForCommands, stopListening])
 
@@ -197,14 +249,14 @@ export default function PlannerScreen({ go }) {
               {hasPain && (
                 <div style={{ background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#fda4af' }}>
                   <strong>⚠ Zonas de molestia marcadas.</strong><br />
-                  Presiona el botón de abajo para recalcular tu rutina.
+                  Di en voz alta <strong style={{color: 'var(--accent2)'}}>"generar rutina"</strong> para procesar con IA.
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* 🟢 NUEVA TARJETA: Feedback Explicativo del LLM (Solo aparece si el servidor responde) */}
+        {/* Tarjeta de Feedback Explicativo del LLM de FastAPI */}
         {aiFeedback && !loading && (
           <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '16px', borderLeft: '4px solid #4ade80', background: 'rgba(74,222,128,0.03)' }}>
             <div className="label" style={{ fontSize: '10px', color: '#4ade80', marginBottom: '6px' }}>Análisis de Adaptación de GymAI</div>
@@ -214,7 +266,6 @@ export default function PlannerScreen({ go }) {
           </div>
         )}
 
-        {/* Alerta de error en peticiones */}
         {errorApi && (
           <div style={{ color: '#f43f5e', fontSize: '12px', textAlign: 'center', background: 'rgba(244,63,94,0.08)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(244,63,94,0.2)' }}>
             ⚠️ {errorApi}
@@ -230,16 +281,13 @@ export default function PlannerScreen({ go }) {
             </span>
           </div>
 
-          {/* Efecto de desvanecimiento por carga */}
           <div style={{ opacity: loading ? 0.35 : 1, transition: 'opacity 0.2s', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {routine.map((ex, i) => (
               <ExerciseRow
                 key={ex.name + i}
                 num={i + 1}
                 name={ex.name}
-                // Adaptado al contrato del backend (soporta el string local o el sets_description de FastAPI)
                 sets={ex.sets_description || ex.sets}
-                // Bandera directa mapeada desde tu JSON de Python
                 modified={ex.is_modified}
               />
             ))}
@@ -254,7 +302,7 @@ export default function PlannerScreen({ go }) {
           )}
         </div>
 
-        {/* BOTONES DE ACCIÓN PRINCIPALES */}
+        {/* Botones principales */}
         <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
           <button className="btn-primary" style={{ flex: 1.8 }} onClick={() => go('scan')} disabled={loading}>
             Aceptar y entrenar
