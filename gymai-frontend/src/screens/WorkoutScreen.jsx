@@ -19,13 +19,13 @@ export default function WorkoutScreen({ go }) {
   const { isListening, listenForCommands, stopListening } = useVoiceCommand()
   const currentExercise = ROUTINE_DATA[exIdx]
 
-  // 🛡️ Referencia mutable para ejecutar acciones dentro de closures y comandos de voz sin re-renders
+  //  Referencia mutable para ejecutar acciones dentro de closures y comandos de voz sin re-renders
   const actionsRef = useRef(null)
 
-  // ── 🎤 FUNCIÓN CENTRAL DE VOZ (SPEAK) CON APAGADO DE MICRÓFONO REFORZADO ──
+  // ──  FUNCIÓN CENTRAL DE VOZ (SPEAK) CON APAGADO DE MICRÓFONO REFORZADO ──
   const speak = (text, onComplete = null) => {
     window.speechSynthesis.cancel() // Limpia cualquier audio pendiente
-    stopListening() // 👈 Apaga el micro inmediatamente para que no escuche sus propias palabras
+    stopListening() //  Apaga el micro inmediatamente para que no escuche sus propias palabras
 
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = 'es-PE'

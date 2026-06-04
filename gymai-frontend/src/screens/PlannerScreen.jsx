@@ -39,7 +39,7 @@ export default function PlannerScreen({ go }) {
   // ──  SISTEMA DE SÍNTESIS DE VOZ BLINDADO ──────────────────────────────────
   const speak = useCallback((text, onComplete = null) => {
     window.speechSynthesis.cancel() // Mata cualquier voz previa
-    stopListening() // 👈 Silencia el micrófono de inmediato para evitar el eco
+    stopListening() 
 
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = 'es-PE'
@@ -304,7 +304,7 @@ export default function PlannerScreen({ go }) {
 
         {/* Botones principales */}
         <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-          <button className="btn-primary" style={{ flex: 1.8 }} onClick={() => go('scan')} disabled={loading}>
+          <button className="btn-primary" style={{ flex: 1.8 }} onClick={() => go('workout')} disabled={loading}>
             Aceptar y entrenar
           </button>
           

@@ -171,7 +171,7 @@ export default function ScanScreen({ go }) {
           {/* Alertas de error */}
           {displayError && !loading && (
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.85)', color: '#f43f5e', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '16px', fontSize: '12px' }}>
-              ⚠️ {displayError}
+               {displayError}
             </div>
           )}
         </div>
@@ -181,23 +181,23 @@ export default function ScanScreen({ go }) {
           {!previewSrc ? (
             /* 1. Estado inicial: Solo capturar */
             <button className="btn-primary" style={{ flex: 1, padding: '12px' }} onClick={capturePhoto}>
-              📸 Capturar entorno
+               Capturar entorno
             </button>
           ) : (
             /* 2. Estado capturado o analizado */
             <>
               <button className="btn-secondary" style={{ flex: 1, fontSize: '13px' }} onClick={retakePhoto} disabled={loading}>
-                🔄 Otra foto
+                 Otra foto
               </button>
               
               {scanResult ? (
-                /* 🌟 SI YA HAY RESULTADOS: El botón muta a la acción final */
+                /*  SI YA HAY RESULTADOS: El botón muta a la acción final */
                 <button 
                   className="btn-primary" 
                   style={{ flex: 1.5, fontSize: '13px', background: '#22c55e', animation: 'pulse 2s infinite' }} 
                   onClick={() => go('workout')}
                 >
-                  💪 Confirmar y entrenar →
+                   Confirmar y entrenar →
                 </button>
               ) : (
                 /* SI NO HAY RESULTADOS AÚN: Botón normal de enviar */
@@ -207,7 +207,7 @@ export default function ScanScreen({ go }) {
                   onClick={() => sendPhotoToAI()} 
                   disabled={loading}
                 >
-                  🚀 Analizar equipo
+                   Analizar equipo
                 </button>
               )}
             </>
