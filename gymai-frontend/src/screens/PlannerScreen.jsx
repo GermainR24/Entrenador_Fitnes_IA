@@ -3,6 +3,7 @@ import HombreFrontal from '../components/svg/HombreFrontal.jsx'
 import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
 import useVoiceCommand from '../hooks/useVoiceCommand'
 import { useWorkout } from '../context/WorkoutContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const DEFAULT_ROUTINE = [
   { name: 'Press de banca',             sets_description: '4 × 8–10 reps · 75 kg',       is_modified: false },
@@ -38,6 +39,7 @@ export default function PlannerScreen({ go }) {
 
   // Contexto global: guardamos la rutina aquí para que WorkoutScreen la lea
   const { startSession } = useWorkout()
+  const { authFetch } = useAuth()
 
   // ── SISTEMA DE SÍNTESIS DE VOZ ──────────────────────────────────────────────
   const speak = useCallback((text, onComplete = null) => {
@@ -61,15 +63,13 @@ export default function PlannerScreen({ go }) {
   const togglePain     = useCallback((slug) => setPainZones(prev => { const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n }), [])
   const clearPainZones = useCallback(() => setPainZones(new Set()), [])
 
-  // ── LLAMADA AL BACKEND ──────────────────────────────────────────────────────
+  // ── LLAMADA AL BACKEND USANDO AUTHFETCH ─────────────────────────────────────
   const generarRutinaAdaptada = useCallback(async () => {
     setLoading(true)
     setErrorApi(null)
     try {
-      const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
-      const response = await fetch(`${API_BASE}/routines/adapt`, {
+      const response = await authFetch('/routines/adapt', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feel_value: feelVal, pain_zones: [...painZones] })
       })
       if (!response.ok) throw new Error('No se pudo obtener la rutina adaptada del servidor.')
@@ -91,16 +91,13 @@ export default function PlannerScreen({ go }) {
     } finally {
       setLoading(false)
     }
-  }, [feelVal, painZones, speak])
+  }, [feelVal, painZones, authFetch, speak])
 
   // ── ACEPTAR Y ENTRENAR: guarda la rutina en el contexto global ──────────────
-  // Este es el cambio clave: antes solo hacía go('workout'), ahora primero
-  // llama a startSession(routine) para que WorkoutScreen reciba la rutina real
-  // (ya sea la base o la adaptada por IA) en vez de su lista hardcodeada.
   const aceptarYEntrenar = useCallback(() => {
-    startSession(routine)
+    startSession(routine, feelVal, [...painZones])
     go('workout')
-  }, [routine, startSession, go])
+  }, [routine, feelVal, painZones, startSession, go])
 
   const hasPain = painZones.size > 0
   const actionsRef = useRef(null)
@@ -117,7 +114,6 @@ export default function PlannerScreen({ go }) {
       'atrás':   () => actionsRef.current.go('dashboard'),
       'dashboard': () => actionsRef.current.go('dashboard'),
 
-      // Aceptar ahora usa aceptarYEntrenar en vez de go('scan') directo
       'aceptar':  () => actionsRef.current.aceptarYEntrenar(),
       'entrenar': () => actionsRef.current.aceptarYEntrenar(),
       'empezar':  () => actionsRef.current.aceptarYEntrenar(),
