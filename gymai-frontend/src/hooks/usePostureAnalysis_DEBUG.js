@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useMemo } from 'react'
 import { crearRepTracker, resetRepTracker } from './exercises/poseUtils'
 import { getAnalizador, tieneAnalizador } from './exercises/index'
 
+
 export default function usePostureAnalysis({ exercise } = {}) {
   const [phase, setPhase] = useState('idle')
   const [repCount, setRepCount] = useState(0)
@@ -13,7 +14,10 @@ export default function usePostureAnalysis({ exercise } = {}) {
   const trackerRef = useRef(crearRepTracker())
   const lastFeedbackTimeRef = useRef(0)
 
-
+  // Vista del mapa muscular (frontal/espalda) que corresponde a este ejercicio.
+  // Se deriva directamente de la config del registro, no del análisis de
+  // frames, para estar disponible desde el primer render (no parpadea
+  // mientras la cámara/modelo MediaPipe terminan de inicializar).
   const muscleView = useMemo(() => {
     const analizador = getAnalizador(exercise)
     return analizador?.config?.view || 'frontal'
@@ -37,13 +41,24 @@ export default function usePostureAnalysis({ exercise } = {}) {
   }, [])
 
   const analyzeFrame = useCallback((landmarks) => {
-    if (!landmarks || landmarks.length < 33) return
-    if (!tieneAnalizador(exercise)) return
+    if (!landmarks || landmarks.length < 33) {
+      console.log('[DEBUG] sin landmarks o insuficientes:', landmarks?.length)
+      return
+    }
+    if (!tieneAnalizador(exercise)) {
+      console.log('[DEBUG] no hay analizador para exercise:', exercise)
+      return
+    }
 
     const { analyze, config } = getAnalizador(exercise)
     const result = analyze(landmarks, trackerRef.current, config)
 
-    if (result.angle === null) return // sin suficiente visibilidad este frame, o esperando detectar lado activo
+    console.log('[DEBUG] result:', result)
+
+    if (result.angle === null) {
+      console.log('[DEBUG] angle es null, cortando aquí')
+      return
+    }
 
     setAngle(result.angle)
     setPhase(result.phase)

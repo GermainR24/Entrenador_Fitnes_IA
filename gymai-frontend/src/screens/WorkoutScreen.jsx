@@ -3,11 +3,8 @@ import useVoiceCommand from '../hooks/useVoiceCommand'
 import useMediaPipe from '../hooks/useMediaPipe'
 import usePostureAnalysis from '../hooks/usePostureAnalysis'
 import HombreFrontal from '../components/svg/HombreFrontal'
+import HombreEspalda from '../components/svg/HombreEspalda'
 
-// Rutina cargada por defecto
-// `exercise` debe coincidir con una clave de EXERCISE_REGISTRY (src/hooks/exercises/index.js)
-// para que tenga corrección postural por visión computacional. Si no coincide
-// o es null, el ejercicio funciona igual que antes (cámara + esqueleto, sin análisis).
 const ROUTINE_DATA = [
   { name: 'Sentadilla', sets_count: 3, sets_description: '3 × 10–12 reps · Peso corporal', exercise: 'sentadilla' },
   { name: 'Elevaciones Laterales', sets_count: 3, sets_description: '3 × 12–15 reps · 8 kg', exercise: 'hombros_laterales' },
@@ -37,6 +34,7 @@ export default function WorkoutScreen({ go }) {
     repsBySide,
     feedback,
     activeMuscles,
+    muscleView,
     angle: jointAngle,
     reset: resetPostureAnalysis,
     soportaAnalisis,
@@ -276,7 +274,7 @@ export default function WorkoutScreen({ go }) {
                 {/* Feed de Video */}
                 <div style={{
                     position: 'relative',
-                    flex: tieneVisionPostural ? '1.4' : '1',
+                    flex: tieneVisionPostural ? '2' : '1',
                     aspectRatio: '3/4',
                     borderRadius: '12px',
                     overflow: 'hidden',
@@ -356,24 +354,38 @@ export default function WorkoutScreen({ go }) {
                   )}
                 </div>
 
-                {/* Mapa muscular: solo se muestra para ejercicios con análisis postural */}
+                {/* Mapa muscular: solo se muestra para ejercicios con análisis postural.
+                    Alterna automáticamente entre vista frontal/espalda según
+                    qué músculos trabaja el ejercicio actual (muscleView del
+                    hook), sin necesidad de que el usuario lo toque. */}
                 {tieneVisionPostural && (
                   <div style={{
-                      flex: '1',
+                      flex: '0.85',
+                      maxWidth: '120px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       background: 'rgba(255,255,255,0.02)',
                       borderRadius: '12px',
-                      padding: '6px'
+                      padding: '4px'
                     }}>
-                    <HombreFrontal
-                      activeIds={activeMuscles}
-                      highlightColor="#22d3ee"
-                      interactive={false}
-                      width="100%"
-                      height="100%"
-                    />
+                    {muscleView === 'espalda' ? (
+                      <HombreEspalda
+                        activeIds={activeMuscles}
+                        highlightColor="#22d3ee"
+                        interactive={false}
+                        width="100%"
+                        height="100%"
+                      />
+                    ) : (
+                      <HombreFrontal
+                        activeIds={activeMuscles}
+                        highlightColor="#22d3ee"
+                        interactive={false}
+                        width="100%"
+                        height="100%"
+                      />
+                    )}
                   </div>
                 )}
               </div>

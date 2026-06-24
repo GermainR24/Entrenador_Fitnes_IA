@@ -1,16 +1,9 @@
-/**
- * squatAnalyzer.js
- * ----------------
- * Analiza sentadillas: ángulo cadera-rodilla-tobillo.
- * Detecta: valgo de rodilla, espalda muy inclinada, profundidad insuficiente.
- *
- * Fases: up -> descending -> down -> ascending -> (vuelve a up = 1 rep)
- */
 import { LANDMARKS as L, visible, calcularAngulo, promedioPuntos, promedioAngulos, inclinacionRespectoVertical } from './poseUtils'
 
 export const SQUAT_CONFIG = {
   label: 'Sentadilla',
   muscles: ['quadriceps', 'gluteal'],
+  view: 'frontal',
   // Ángulo de rodilla: ~170-180° = pierna extendida (de pie)
   //                     ~70-100°  = sentadilla profunda (abajo)
   ANGULO_DE_PIE: 160,

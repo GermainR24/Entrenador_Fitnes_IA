@@ -1,22 +1,9 @@
-/**
- * benchPressAnalyzer.js
- * ---------------------
- * Analiza press de banca (mancuerna o barra). Ángulo del codo: hombro-codo-muñeca.
- * Detecta: rango incompleto (no bajar lo suficiente), codos demasiado abiertos
- * (riesgo de hombro), asimetría entre brazos.
- *
- * Fases: extended -> lowering -> lowered -> pressing -> (vuelve a extended = 1 rep)
- *
- * Nota: esta cámara está pensada para uso de pie/sentado frente al espejo o
- * trípode lateral durante ejecución en banca, dado el setup "Hands-Free" de
- * GymAI. Si el ángulo de cámara real difiere mucho (ej. banca horizontal con
- * cámara cenital), los umbrales pueden requerir ajuste fino en pruebas de campo.
- */
 import { LANDMARKS as L, visible, calcularAngulo, promedioAngulos } from './poseUtils'
 
 export const BENCH_PRESS_CONFIG = {
   label: 'Press de banca',
   muscles: ['chest', 'triceps', 'deltoids'],
+  view: 'frontal',
   ANGULO_EXTENDIDO: 155,    // brazos extendidos arriba
   ANGULO_ABAJO: 95,         // codos doblados ~90°, posición baja correcta
   ANGULO_RANGO_MINIMO: 115, // si nunca baja de esto, rango incompleto

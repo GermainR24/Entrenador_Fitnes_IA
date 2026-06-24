@@ -1,20 +1,10 @@
-/**
- * shoulderLateralAnalyzer.js
- * --------------------------
- * Analiza elevaciones laterales de hombro (lateral raise).
- * Ángulo de abducción: cadera-hombro-codo (qué tan separado está el brazo del torso).
- *
- * Fases: down -> raising -> raised -> lowering -> (vuelve a down = 1 rep)
- *
- * Limitación conocida: MediaPipe es 2D, así que la medición de abducción
- * funciona mejor con cámara de frente al usuario. Mantenemos umbrales
- * conservadores para evitar falsos positivos.
- */
+
 import { LANDMARKS as L, visible, calcularAngulo, promedioAngulos } from './poseUtils'
 
 export const SHOULDER_LATERAL_CONFIG = {
   label: 'Hombros laterales',
   muscles: ['deltoids'],
+  view: 'frontal',
   ANGULO_ABAJO: 30,           // brazos pegados al cuerpo
   ANGULO_ARRIBA: 75,          // brazos a la altura del hombro (objetivo correcto)
   ANGULO_EXCESO: 110,         // por encima de esto, ya está usando trapecio/impulso

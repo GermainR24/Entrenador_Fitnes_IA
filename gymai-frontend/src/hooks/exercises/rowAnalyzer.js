@@ -1,38 +1,15 @@
-/**
- * rowAnalyzer.js
- * --------------
- * Analiza remo unilateral con mancuerna (a una mano, apoyado en banco).
- * A diferencia de press de banca o elevaciones laterales, AMBOS brazos
- * no trabajan a la vez: uno jala mientras el otro se apoya quieto.
- *
- * Estrategia de detección del brazo activo:
- *   Mantenemos una ventana corta de los últimos N ángulos de cada brazo.
- *   El brazo "activo" es el que tiene mayor varianza de movimiento reciente
- *   (el que se está moviendo). El brazo quieto se ignora en ese frame.
- *
- * Conteo de reps:
- *   El tracker lleva sub-contadores independientes { left: n, right: n }.
- *   Cuando se detecta un cambio de brazo activo (tras una pausa), el
- *   contador del lado anterior queda "congelado" y se empieza a sumar al
- *   nuevo lado activo. El set se considera completo cuando el usuario dice
- *   "serie completada" (lógica de WorkoutScreen, sin cambios ahí).
- *
- * Fases por brazo: extended -> pulling -> contracted -> releasing -> extended (+1 rep)
- *
- * Detecta: rango incompleto, balanceo del torso (impulso en vez de jalar
- * con la espalda).
- */
 import { LANDMARKS as L, visible, calcularAngulo, promedioPuntos, inclinacionRespectoVertical } from './poseUtils'
 
 export const ROW_CONFIG = {
   label: 'Remo Unilateral con Mancuerna',
   muscles: ['upper-back', 'lower-back', 'biceps'],
-  ANGULO_EXTENDIDO: 155,     // brazo extendido hacia abajo/al frente
-  ANGULO_CONTRAIDO: 85,      // codo atrás, contracción correcta
-  ANGULO_RANGO_MINIMO: 105,  // si nunca baja de esto, rango incompleto
-  BALANCEO_TOLERANCIA: 12,   // grados de cambio de inclinación de torso tolerados
-  VENTANA_DETECCION_BRAZO: 6,  // cuántos frames recientes se usan para decidir qué brazo se mueve
-  VARIANZA_MINIMA_ACTIVO: 4,   // grados² mínimos de varianza para considerar "en movimiento"
+  view: 'espalda',
+  ANGULO_EXTENDIDO: 155,     
+  ANGULO_CONTRAIDO: 85,      
+  ANGULO_RANGO_MINIMO: 105,  
+  BALANCEO_TOLERANCIA: 12,  
+  VENTANA_DETECCION_BRAZO: 6,  
+  VARIANZA_MINIMA_ACTIVO: 4,  
 }
 
 // Inicializa los campos específicos de remo dentro del tracker genérico
