@@ -51,19 +51,30 @@ El sistema requiere credenciales para conectarse a la base de datos. Pydantic bl
 cp .env.example .env
 ```
 
+### 5. Poblar la Base de Datos (Seeding / Datos de Prueba)
 
-### 5. Ejecutar el Servidor local
+Para poder visualizar las gráficas del frontend sin tener que registrar entrenamientos manualmente durante meses, el proyecto cuenta con un semillero de datos (*Seeder*). Este script inyecta 3 perfiles de usuario (Principiante, Intermedio y Avanzado) generando 12 semanas de historial de sobrecarga progresiva con lógicas matemáticas realistas.
+
+Ejecuta el siguiente comando desde la raíz del backend:
+
+```bash
+python3 -m app.seeds.seed_database
+
+```
+
+### 6. Ejecutar el Servidor Local
 
 Para iniciar la aplicación usamos Uvicorn. El parámetro `app.main:app` le indica a Python que busque el paquete `app`, abra el archivo `main.py` y ejecute la instancia llamada `app`. La bandera `--reload` reiniciará automáticamente el servidor cada vez que guardes un cambio en el código.
 
 ```bash
 uvicorn app.main:app --reload
+
 ```
 
-### 6. Probar la API (Swagger UI)
+### 7. Probar la API (Swagger UI)
 
 FastAPI genera documentación interactiva automáticamente basada en tus endpoints y esquemas (OpenAPI). Una vez que el servidor esté corriendo, abre tu navegador y visita:
 
-**[http://localhost:8000/docs](https://www.google.com/search?q=http://localhost:8000/docs)**
+**http://localhost:8000/docs**
 
-Desde esta interfaz podrás ver todas las rutas disponibles, probar envíos de datos (POST) y revisar las respuestas del servidor sin necesidad de usar herramientas externas como Postman.
+Desde esta interfaz podrás ver todas las rutas disponibles, probar envíos de datos (POST) y revisar las respuestas del servidor sin necesidad de usar herramientas externas.

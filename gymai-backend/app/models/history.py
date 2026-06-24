@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime, timezone
 import json
 
@@ -41,3 +41,13 @@ class WorkoutSaveRequest(SQLModel):
     pain_zones: List[str] = Field(default=[])
     ai_feedback_log: Optional[str] = Field(default=None)
     exercises: List[ExerciseLogCreate]
+
+class ChartDataPoint(SQLModel):
+    date: datetime
+    weight_kg: float
+
+class HistoryChartResponse(SQLModel):
+    exercises: List[str] = Field(description="Lista de nombres de ejercicios únicos")
+    history: Dict[str, List[ChartDataPoint]] = Field(
+        description="Diccionario donde la llave es el ejercicio y el valor es su historial"
+    ) 

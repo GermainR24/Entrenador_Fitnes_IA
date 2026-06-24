@@ -51,8 +51,17 @@ class UserCreate(UserBase):
             raise ValueError("El password debe contener al menos una letra, un numero y ser estrictamente alfanumerico")
         return value
 
+class UserLogin(SQLModel):
+    email: str
+    password: str
+    
 class UserPublic(UserBase):
     id : int
     is_active: bool
     created_at: datetime
     model_config= {"from_attributes": True}
+
+class AuthResponse(SQLModel):
+    status: str
+    token: str
+    usuario: UserPublic
