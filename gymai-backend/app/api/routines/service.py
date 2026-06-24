@@ -17,12 +17,14 @@ class RoutineService:
 
     async def process_daily_checkin(self, checkin: CheckInRequest, user_id: int) -> RoutineResponse:
         base_routine = self.repository.get_base_routine(user_id)
+        label        = self.repository.get_base_routine_label(user_id)
 
-        # Lógica de eficiencia: sin dolor y con energía → devolver rutina base sin llamar a la IA
+        # Sin dolor y con energía alta → devolver rutina base sin llamar a la IA
         if not checkin.pain_zones and checkin.feel_value >= 7:
             return RoutineResponse(
                 exercises=base_routine,
-                ai_feedback="¡Estás a tope! Vamos a darle con la rutina planificada para hoy."
+                ai_feedback=f"¡Estás a tope! Vamos con {label} tal como está planificado.",
+                day_label=label,
             )
 
         user_data = json.dumps({
@@ -35,45 +37,33 @@ class RoutineService:
             system_prompt=DYNAMIC_FILTER_SYSTEM_PROMPT,
             user_data=user_data
         )
+
+        # Inyectamos el label del día en la respuesta
+        llm_response_dict["day_label"] = label
         return RoutineResponse(**llm_response_dict)
 
     async def generate_weekly_plan(self, request: WeeklyPlanRequest) -> WeeklyPlanResponse:
-        """
-        Llama a la IA para generar un plan semanal de 7 días.
-        Recibe el historial de esta semana (días ya entrenados, ejercicios)
-        para que la IA lo incorpore y no repita grupos musculares en días
-        adyacentes ni sugiera descanso en días ya completados.
-        """
         user_data = json.dumps({
-            "trained_weekdays": request.trained_weekdays,
+            "trained_weekdays":  request.trained_weekdays,
             "trained_exercises": request.trained_exercises,
-            "feel_average": request.feel_average,
-            "goal": request.goal,
+            "feel_average":      request.feel_average,
+            "goal":              request.goal,
         }, ensure_ascii=False)
 
-        # Reutilizamos generate_routine_adaptation: recibe system_prompt + user_data
-        # y devuelve el dict parseado del JSON que respondió el LLM.
         llm_response_dict = await generate_routine_adaptation(
             system_prompt=WEEKLY_PLAN_SYSTEM_PROMPT,
             user_data=user_data
         )
 
-        # Validar que la IA devolvió exactamente 7 días
-        # Si devuelve menos, completamos con días de descanso para no romper la UI.
         days_raw = llm_response_dict.get("days", [])
         weekdays_present = {d["weekday"] for d in days_raw}
         for wd in range(7):
             if wd not in weekdays_present:
                 days_raw.append({
-                    "weekday": wd,
-                    "label": "Descanso",
-                    "sub": "Recovery",
-                    "group": None,
-                    "exercises": None,
-                    "isRest": True,
+                    "weekday": wd, "label": "Descanso", "sub": "Recovery",
+                    "group": None, "exercises": None, "isRest": True,
                 })
 
-        # Ordenar por weekday para consistencia
         days_raw.sort(key=lambda d: d["weekday"])
 
         return WeeklyPlanResponse(

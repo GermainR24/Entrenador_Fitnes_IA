@@ -42,10 +42,13 @@ class CheckInRequest(SQLModel):
 class RoutineResponse(SQLModel):
     exercises: List[ExerciseItem]
     ai_feedback: Optional[str] = Field(
-        default=None, 
-        description="Mensaje en lenguaje natural del LLM explicando la adaptación de la rutina"
+        default=None,
+        description="Mensaje en lenguaje natural del LLM explicando la adaptación"
     )
-
+    day_label: Optional[str] = Field(
+        default=None,
+        description="Nombre del grupo muscular del día, ej: 'Espalda y Bíceps'"
+    )
 
 # ─── Schemas para el plan semanal (WeeklyScreen) ──────────────────────────────
 
