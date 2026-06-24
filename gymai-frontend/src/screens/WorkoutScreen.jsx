@@ -1,20 +1,80 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import useVoiceCommand from '../hooks/useVoiceCommand'
 import useMediaPipe from '../hooks/useMediaPipe'
 import usePostureAnalysis from '../hooks/usePostureAnalysis'
 import HombreFrontal from '../components/svg/HombreFrontal'
 import HombreEspalda from '../components/svg/HombreEspalda'
+import { useWorkout } from '../context/WorkoutContext.jsx'
 
-const ROUTINE_DATA = [
-  { name: 'Sentadilla', sets_count: 3, sets_description: '3 × 10–12 reps · Peso corporal', exercise: 'sentadilla' },
-  { name: 'Elevaciones Laterales', sets_count: 3, sets_description: '3 × 12–15 reps · 8 kg', exercise: 'hombros_laterales' },
-  { name: 'Press de Banca con Mancuernas', sets_count: 4, sets_description: '4 × 8–10 reps · 20 kg', exercise: 'press_banca' },
-  { name: 'Remo con Mancuerna', sets_count: 3, sets_description: '3 × 10–12 reps · 18 kg', exercise: 'remo' },
+// Mapa de nombre de ejercicio → clave del EXERCISE_REGISTRY de visión computacional.
+// Si el nombre del ejercicio del backend contiene alguna de estas palabras,
+// se activa el análisis postural correspondiente.
+const EXERCISE_NAME_MAP = [
+  { keywords: ['sentadilla', 'squat'],              exercise: 'sentadilla'        },
+  { keywords: ['elevación lateral', 'elevaciones'], exercise: 'hombros_laterales' },
+  { keywords: ['remo'],                              exercise: 'remo'              },
+  { keywords: ['press', 'banca', 'mancuerna'],      exercise: 'press_banca'       },
 ]
 
-const MAX_REST_SECONDS = 120 // 2 minutos de descanso objetivo
+// Detecta el id de ejercicio para visión computacional según el nombre recibido del backend.
+function detectarEjercicio(nombre) {
+  if (!nombre) return null
+  const lower = nombre.toLowerCase()
+  for (const { keywords, exercise } of EXERCISE_NAME_MAP) {
+    if (keywords.some(k => lower.includes(k))) return exercise
+  }
+  return null
+}
+
+// Parsea el número máximo de repeticiones desde el texto del backend.
+// Ej: "4 × 8–10 reps · 75 kg" → 10 | "3 × 12 reps" → 12
+function parseTargetReps(setsDescription) {
+  if (!setsDescription) return 12
+  const rangeMatch = setsDescription.match(/(\d+)[–\-](\d+)\s*reps?/i)
+  if (rangeMatch) return Math.max(parseInt(rangeMatch[1]), parseInt(rangeMatch[2]))
+  const singleMatch = setsDescription.match(/(\d+)\s*reps?/i)
+  if (singleMatch) return parseInt(singleMatch[1])
+  return 12
+}
+
+// Parsea el número de series desde el texto del backend.
+// Ej: "4 × 8–10 reps · 75 kg" → 4 | "3 × 12 reps" → 3
+function parseSetsCount(setsDescription) {
+  if (!setsDescription) return 3
+  const match = setsDescription.match(/^(\d+)\s*[×x]/i)
+  return match ? parseInt(match[1]) : 3
+}
+
+// Rutina de fallback: se usa solo si el usuario entra a WorkoutScreen
+// sin haber pasado por PlannerScreen (ej. navegación directa por URL).
+const FALLBACK_ROUTINE = [
+  { name: 'Sentadilla',                  sets_description: '3 × 10–12 reps · Peso corporal', is_modified: false },
+  { name: 'Elevaciones Laterales',       sets_description: '3 × 12–15 reps · 8 kg',          is_modified: false },
+  { name: 'Press de Banca Mancuernas',   sets_description: '4 × 8–10 reps · 20 kg',          is_modified: false },
+  { name: 'Remo con Mancuerna',          sets_description: '3 × 10–12 reps · 18 kg',         is_modified: false },
+]
+
+const MAX_REST_SECONDS = 120
 
 export default function WorkoutScreen({ go }) {
+  // Lee la rutina del contexto global (guardada por PlannerScreen al aceptar).
+  // Si está vacía (acceso directo), usa el fallback para no romper la pantalla.
+  const { routine: contextRoutine } = useWorkout()
+  const rawRoutine = contextRoutine?.length > 0 ? contextRoutine : FALLBACK_ROUTINE
+
+  // Transforma cada ejercicio del backend al formato que necesita WorkoutScreen:
+  // agrega exercise (para visión computacional), target_reps y sets_count
+  // derivados del texto sets_description que ya viene del backend/Planner.
+  const ROUTINE_DATA = useMemo(() => rawRoutine.map(ex => ({
+    name:             ex.name,
+    sets_description: ex.sets_description || ex.sets || '',
+    sets_count:       parseSetsCount(ex.sets_description || ex.sets),
+    exercise:         detectarEjercicio(ex.name),
+    target_reps:      parseTargetReps(ex.sets_description || ex.sets),
+    is_modified:      ex.is_modified ?? false,
+  })), [rawRoutine])
+
+
   const [exIdx, setExIdx] = useState(0)
   const [currentSet, setCurrentSet] = useState(1)
   const [gameState, setGameState] = useState('INTRO') // 'INTRO', 'ACTIVE', 'REST'
@@ -42,6 +102,7 @@ export default function WorkoutScreen({ go }) {
 
   const actionsRef = useRef(null)
   const lastSpokenFeedbackIdRef = useRef(null)
+  const targetReachedAnnouncedRef = useRef(false)
 
   const speak = (text, onComplete = null) => {
     window.speechSynthesis.cancel() 
@@ -154,6 +215,7 @@ export default function WorkoutScreen({ go }) {
     } else {
       stopCamera()
       resetPostureAnalysis()
+      targetReachedAnnouncedRef.current = false
     }
     
     return () => stopCamera()
@@ -167,6 +229,20 @@ export default function WorkoutScreen({ go }) {
       speakFeedbackBrief(feedback.message)
     }
   }, [feedback])
+
+  // Avisa por voz al alcanzar el número de repeticiones objetivo del set.
+  // Solo informa, una vez por serie — el usuario decide cuándo cerrarla
+  // (con "serie completada" o el botón táctil), el conteo sigue activo
+  // por si quiere hacer alguna extra.
+  useEffect(() => {
+    if (gameState !== 'ACTIVE' || !soportaAnalisis) return
+    if (!currentExercise.target_reps) return
+    if (targetReachedAnnouncedRef.current) return
+    if (detectedReps < currentExercise.target_reps) return
+
+    targetReachedAnnouncedRef.current = true
+    speakFeedbackBrief(`Llegaste a ${currentExercise.target_reps} repeticiones. Puedes seguir o decir serie completada.`)
+  }, [detectedReps, gameState, soportaAnalisis, currentExercise.target_reps])
 
   useEffect(() => {
     if (gameState === 'INTRO') {

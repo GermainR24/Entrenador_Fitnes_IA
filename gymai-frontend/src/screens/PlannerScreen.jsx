@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import HombreFrontal from '../components/svg/HombreFrontal.jsx'
 import { mapIdsToSlugs } from '../components/svg/muscleIdToSlug.js'
 import useVoiceCommand from '../hooks/useVoiceCommand'
+import { useWorkout } from '../context/WorkoutContext.jsx'
 
 const DEFAULT_ROUTINE = [
   { name: 'Press de banca',             sets_description: '4 × 8–10 reps · 75 kg',       is_modified: false },
   { name: 'Press inclinado mancuernas', sets_description: '3 × 10–12 reps · 28 kg',      is_modified: false },
   { name: 'Fondos en paralelas',        sets_description: '3 × 12 reps · Peso corporal',  is_modified: false },
-  { name: 'Press francés',              sets_description: '3 × 12 reps · 20 kg',           is_modified: false },
-  { name: 'Extensiones polea alta',     sets_description: '3 × 15 reps · 15 kg',           is_modified: false },
+  { name: 'Press francés',              sets_description: '3 × 12 reps · 20 kg',          is_modified: false },
+  { name: 'Extensiones polea alta',     sets_description: '3 × 15 reps · 15 kg',          is_modified: false },
 ]
 
 const VOICE_MUSCLE_MAP = {
@@ -28,7 +29,6 @@ export default function PlannerScreen({ go }) {
   const [feelVal, setFeelVal] = useState(7)
   const [painZones, setPainZones] = useState(new Set())
   const [routine, setRoutine] = useState(DEFAULT_ROUTINE)
-  
   const [loading, setLoading] = useState(false)
   const [aiFeedback, setAiFeedback] = useState(null)
   const [errorApi, setErrorApi] = useState(null)
@@ -36,95 +36,55 @@ export default function PlannerScreen({ go }) {
   const { isListening, listenForCommands, stopListening } = useVoiceCommand()
   const commandsRef = useRef(null)
 
-  // ──  SISTEMA DE SÍNTESIS DE VOZ BLINDADO ──────────────────────────────────
-  const speak = useCallback((text, onComplete = null) => {
-    window.speechSynthesis.cancel() // Mata cualquier voz previa
-    stopListening() 
+  // Contexto global: guardamos la rutina aquí para que WorkoutScreen la lea
+  const { startSession } = useWorkout()
 
+  // ── SISTEMA DE SÍNTESIS DE VOZ ──────────────────────────────────────────────
+  const speak = useCallback((text, onComplete = null) => {
+    window.speechSynthesis.cancel()
+    stopListening()
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = 'es-PE'
     utterance.rate = 0.98
-
     utterance.onend = () => {
       if (onComplete) {
         onComplete()
       } else if (commandsRef.current) {
-        // Al terminar de hablar, reactiva el micrófono con los comandos actuales
         listenForCommands(commandsRef.current, true)
       }
     }
     window.speechSynthesis.speak(utterance)
   }, [listenForCommands, stopListening])
 
-  const addPainZone = useCallback((slug) => {
-    setPainZones(prev => new Set([...prev, slug]))
-  }, [])
-
-  const removePainZone = useCallback((slug) => {
-    setPainZones(prev => {
-      const next = new Set(prev)
-      next.delete(slug)
-      return next
-    })
-  }, [])
-
-  const togglePain = useCallback((slug) => {
-    setPainZones(prev => {
-      const next = new Set(prev)
-      next.has(slug) ? next.delete(slug) : next.add(slug)
-      return next
-    })
-  }, [])
-
+  const addPainZone    = useCallback((slug) => setPainZones(prev => new Set([...prev, slug])), [])
+  const removePainZone = useCallback((slug) => setPainZones(prev => { const n = new Set(prev); n.delete(slug); return n }), [])
+  const togglePain     = useCallback((slug) => setPainZones(prev => { const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n }), [])
   const clearPainZones = useCallback(() => setPainZones(new Set()), [])
 
-  
-  // ──  FUNCIÓN ACTUALIZADA CON LECTURA DE LISTA DE EJERCICIOS ────────────────
+  // ── LLAMADA AL BACKEND ──────────────────────────────────────────────────────
   const generarRutinaAdaptada = useCallback(async () => {
     setLoading(true)
     setErrorApi(null)
     try {
       const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
-      
-      const payload = {
-        feel_value: feelVal,
-        pain_zones: [...painZones]
-      }
-
       const response = await fetch(`${API_BASE}/routines/adapt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ feel_value: feelVal, pain_zones: [...painZones] })
       })
-
-      if (!response.ok) {
-        throw new Error('No se pudo obtener la rutina adaptada del servidor.')
-      }
-
+      if (!response.ok) throw new Error('No se pudo obtener la rutina adaptada del servidor.')
       const data = await response.json()
-      
-      setRoutine(data.exercises)   
-      setAiFeedback(data.ai_feedback) 
+      setRoutine(data.exercises)
+      setAiFeedback(data.ai_feedback)
 
-      //  1. CONSTRUIR EL TEXTO AUDIBLE DE LOS EJERCICIOS
-      // Convertimos los símbolos técnicos (4 × 8-10 reps) a palabras fluidas en español
       const ejerciciosHablados = data.exercises.map((ex, i) => {
-        const textoBase = ex.sets_description || ex.sets || '';
-        const textoFormateado = textoBase
-          .replace(/×/g, 'series de') // Cambia el símbolo × por la palabra "series de"
-          .replace(/–/g, 'a')         // Cambia el guion largo por "a" (ej. 8 a 10)
-          .replace(/-/g, 'a')         // Por si viene guion normal
-          .replace(/reps/g, 'repeticiones'); // Cambia reps por "repeticiones"
+        const textoFormateado = (ex.sets_description || ex.sets || '')
+          .replace(/×/g, 'series de').replace(/–/g, 'a').replace(/-/g, 'a').replace(/reps/g, 'repeticiones')
+        return `Ejercicio ${i + 1}: ${ex.name}. Te tocan ${textoFormateado}.`
+      }).join(' ')
 
-        return `Ejercicio ${i + 1}: ${ex.name}. Te tocan ${textoFormateado}.`;
-      }).join(' ');
-
-      // 🎙️ 2. ORQUESTAR LA AUDIO-GUÍA COMPLETA
-      const mensajeFeedback = data.ai_feedback || 'Tu rutina ha sido adaptada con éxito.';
-      
-      // Concatenamos el análisis de la IA junto con la lectura ordenada de tu tabla
-      speak(`${mensajeFeedback} A continuación, te dicto tu lista de entrenamiento: ${ejerciciosHablados} Di "aceptar" para iniciar.`);
-
+      const mensajeFeedback = data.ai_feedback || 'Tu rutina ha sido adaptada con éxito.'
+      speak(`${mensajeFeedback} A continuación, te dicto tu lista de entrenamiento: ${ejerciciosHablados} Di "aceptar" para iniciar.`)
     } catch (err) {
       setErrorApi(err.message || 'Error de comunicación con el backend.')
       speak('Hubo un error de conexión con el servidor de inteligencia artificial.')
@@ -133,51 +93,54 @@ export default function PlannerScreen({ go }) {
     }
   }, [feelVal, painZones, speak])
 
+  // ── ACEPTAR Y ENTRENAR: guarda la rutina en el contexto global ──────────────
+  // Este es el cambio clave: antes solo hacía go('workout'), ahora primero
+  // llama a startSession(routine) para que WorkoutScreen reciba la rutina real
+  // (ya sea la base o la adaptada por IA) en vez de su lista hardcodeada.
+  const aceptarYEntrenar = useCallback(() => {
+    startSession(routine)
+    go('workout')
+  }, [routine, startSession, go])
+
   const hasPain = painZones.size > 0
-
-  // Guardamos las referencias mutables estables para los cierres del hook de voz
   const actionsRef = useRef(null)
-  actionsRef.current = { generarRutinaAdaptada, go, addPainZone, removePainZone, clearPainZones }
+  actionsRef.current = { generarRutinaAdaptada, aceptarYEntrenar, go, addPainZone, removePainZone, clearPainZones }
 
-  // 1. Mensaje de bienvenida audible al montar la pantalla por primera vez
   useEffect(() => {
     speak('Bienvenido a tu check-in diario. Tu rutina base hoy es Pecho y Tríceps. Ajusta tu energía o indícame qué músculos te molestan antes de entrenar.')
-    
-    return () => {
-      window.speechSynthesis.cancel() // Cancela el habla si el usuario cambia de pantalla rápido
-    }
+    return () => window.speechSynthesis.cancel()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 2. Orquestador dinámico de Comandos de Voz
   useEffect(() => {
     const commands = {
-      'volver': () => actionsRef.current.go('dashboard'),
-      'atrás': () => actionsRef.current.go('dashboard'),
+      'volver':  () => actionsRef.current.go('dashboard'),
+      'atrás':   () => actionsRef.current.go('dashboard'),
       'dashboard': () => actionsRef.current.go('dashboard'),
-      
-      'aceptar': () => actionsRef.current.go('scan'),
-      'entrenar': () => actionsRef.current.go('scan'),
-      'empezar': () => actionsRef.current.go('scan'),
-      
-      'generar rutina': () => actionsRef.current.generarRutinaAdaptada(),
-      'actualizar rutina': () => actionsRef.current.generarRutinaAdaptada(),
-      'calcular': () => actionsRef.current.generarRutinaAdaptada(),
-      'adaptar': () => actionsRef.current.generarRutinaAdaptada(),
 
-      'más energía': () => setFeelVal(prev => Math.min(prev + 1, 10)),
-      'subir nivel': () => setFeelVal(prev => Math.min(prev + 1, 10)),
+      // Aceptar ahora usa aceptarYEntrenar en vez de go('scan') directo
+      'aceptar':  () => actionsRef.current.aceptarYEntrenar(),
+      'entrenar': () => actionsRef.current.aceptarYEntrenar(),
+      'empezar':  () => actionsRef.current.aceptarYEntrenar(),
+
+      'generar rutina':   () => actionsRef.current.generarRutinaAdaptada(),
+      'actualizar rutina': () => actionsRef.current.generarRutinaAdaptada(),
+      'calcular':         () => actionsRef.current.generarRutinaAdaptada(),
+      'adaptar':          () => actionsRef.current.generarRutinaAdaptada(),
+
+      'más energía':  () => setFeelVal(prev => Math.min(prev + 1, 10)),
+      'subir nivel':  () => setFeelVal(prev => Math.min(prev + 1, 10)),
       'menos energía': () => setFeelVal(prev => Math.max(prev - 1, 1)),
-      'bajar nivel': () => setFeelVal(prev => Math.max(prev - 1, 1)),
-      
+      'bajar nivel':  () => setFeelVal(prev => Math.max(prev - 1, 1)),
+
       'limpiar dolores': () => actionsRef.current.clearPainZones(),
-      'sin dolor': () => actionsRef.current.clearPainZones(),
+      'sin dolor':       () => actionsRef.current.clearPainZones(),
 
       ...Object.keys(VOICE_MUSCLE_MAP).reduce((acc, keyword) => {
         const slug = VOICE_MUSCLE_MAP[keyword]
-        acc[`me duele el ${keyword}`] = () => actionsRef.current.addPainZone(slug)
-        acc[`me duele la ${keyword}`] = () => actionsRef.current.addPainZone(slug)
-        acc[`me duele ${keyword}`] = () => actionsRef.current.addPainZone(slug)
-        acc[`dolor en ${keyword}`] = () => actionsRef.current.addPainZone(slug)
+        acc[`me duele el ${keyword}`]  = () => actionsRef.current.addPainZone(slug)
+        acc[`me duele la ${keyword}`]  = () => actionsRef.current.addPainZone(slug)
+        acc[`me duele ${keyword}`]     = () => actionsRef.current.addPainZone(slug)
+        acc[`dolor en ${keyword}`]     = () => actionsRef.current.addPainZone(slug)
         acc[`quitar dolor ${keyword}`] = () => actionsRef.current.removePainZone(slug)
         return acc
       }, {})
@@ -185,13 +148,11 @@ export default function PlannerScreen({ go }) {
 
     for (let i = 1; i <= 10; i++) {
       commands[`poner nivel ${i}`] = () => setFeelVal(i)
-      commands[`nivel ${i}`] = () => setFeelVal(i)
+      commands[`nivel ${i}`]       = () => setFeelVal(i)
     }
 
     commandsRef.current = commands
-    // Iniciamos la escucha del micrófono una vez definidos los comandos
     listenForCommands(commands, true)
-    
     return () => stopListening()
   }, [listenForCommands, stopListening])
 
@@ -210,22 +171,13 @@ export default function PlannerScreen({ go }) {
       <div className="screen-body" style={{ paddingBottom: '30px' }}>
         <div>
           <div className="label" style={{ marginBottom: '4px' }}>Plan de hoy</div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: '20px', fontWeight: 700 }}>
-            Pecho y Tríceps
-          </div>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: '20px', fontWeight: 700 }}>Pecho y Tríceps</div>
         </div>
 
-        {/* Slider de energía */}
         <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px' }}>
           <div className="label" style={{ marginBottom: '10px' }}>¿Cómo te sientes hoy?</div>
-          <input
-            type="range"
-            className="range-custom"
-            min="1" max="10"
-            value={feelVal}
-            onChange={e => setFeelVal(Number(e.target.value))}
-            disabled={loading}
-          />
+          <input type="range" className="range-custom" min="1" max="10" value={feelVal}
+            onChange={e => setFeelVal(Number(e.target.value))} disabled={loading} />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
             <span style={{ fontSize: '12px', color: 'var(--text3)' }}>Agotado</span>
             <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent)' }}>{feelVal}/10</span>
@@ -233,15 +185,10 @@ export default function PlannerScreen({ go }) {
           </div>
         </div>
 
-        {/* Mapa anatómico */}
         <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px' }}>
           <div className="label" style={{ marginBottom: '10px' }}>Toca si tienes alguna molestia</div>
           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-            <HombreFrontal
-              activeIds={mapIdsToSlugs([...painZones])}
-              onMuscleClick={loading ? null : togglePain}
-              width={180}
-            />
+            <HombreFrontal activeIds={mapIdsToSlugs([...painZones])} onMuscleClick={loading ? null : togglePain} width={180} />
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: '12px', color: 'var(--text3)', marginBottom: '10px' }}>
                 La IA ajustará tu rutina según las zonas marcadas
@@ -249,20 +196,17 @@ export default function PlannerScreen({ go }) {
               {hasPain && (
                 <div style={{ background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#fda4af' }}>
                   <strong>⚠ Zonas de molestia marcadas.</strong><br />
-                  Di en voz alta <strong style={{color: 'var(--accent2)'}}>"generar rutina"</strong> para procesar con IA.
+                  Di en voz alta <strong style={{ color: 'var(--accent2)' }}>"generar rutina"</strong> para procesar con IA.
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Tarjeta de Feedback Explicativo del LLM de FastAPI */}
         {aiFeedback && !loading && (
           <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '16px', borderLeft: '4px solid #4ade80', background: 'rgba(74,222,128,0.03)' }}>
             <div className="label" style={{ fontSize: '10px', color: '#4ade80', marginBottom: '6px' }}>Análisis de Adaptación de GymAI</div>
-            <p style={{ fontSize: '12.5px', color: 'var(--text2)', lineHeight: 1.5, margin: 0 }}>
-              {aiFeedback}
-            </p>
+            <p style={{ fontSize: '12.5px', color: 'var(--text2)', lineHeight: 1.5, margin: 0 }}>{aiFeedback}</p>
           </div>
         )}
 
@@ -272,7 +216,6 @@ export default function PlannerScreen({ go }) {
           </div>
         )}
 
-        {/* Bloque de Rutina */}
         <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div className="label">Rutina de Entrenamiento</div>
@@ -280,19 +223,12 @@ export default function PlannerScreen({ go }) {
               {loading ? '...' : `${routine.length} ejercicios`}
             </span>
           </div>
-
           <div style={{ opacity: loading ? 0.35 : 1, transition: 'opacity 0.2s', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {routine.map((ex, i) => (
-              <ExerciseRow
-                key={ex.name + i}
-                num={i + 1}
-                name={ex.name}
-                sets={ex.sets_description || ex.sets}
-                modified={ex.is_modified}
-              />
+              <ExerciseRow key={ex.name + i} num={i + 1} name={ex.name}
+                sets={ex.sets_description || ex.sets} modified={ex.is_modified} />
             ))}
           </div>
-
           {loading && (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ fontSize: '13px', color: 'var(--accent)', background: '#12161a', padding: '8px 16px', borderRadius: '20px', border: '1px solid var(--border)' }}>
@@ -302,22 +238,13 @@ export default function PlannerScreen({ go }) {
           )}
         </div>
 
-        {/* Botones principales */}
         <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-          <button className="btn-primary" style={{ flex: 1.8 }} onClick={() => go('workout')} disabled={loading}>
+          <button className="btn-primary" style={{ flex: 1.8 }} onClick={aceptarYEntrenar} disabled={loading}>
             Aceptar y entrenar
           </button>
-          
-          <button 
-            className="btn-secondary" 
-            style={{ 
-              flex: 1.2, 
-              border: hasPain && !aiFeedback ? '1px solid rgba(74,222,128,0.4)' : '1px solid var(--border2)',
-              color: hasPain && !aiFeedback ? '#4ade80' : 'var(--text)' 
-            }} 
-            onClick={generarRutinaAdaptada} 
-            disabled={loading}
-          >
+          <button className="btn-secondary"
+            style={{ flex: 1.2, border: hasPain && !aiFeedback ? '1px solid rgba(74,222,128,0.4)' : '1px solid var(--border2)', color: hasPain && !aiFeedback ? '#4ade80' : 'var(--text)' }}
+            onClick={generarRutinaAdaptada} disabled={loading}>
             {loading ? 'Procesando...' : 'Generar con IA ✨'}
           </button>
         </div>

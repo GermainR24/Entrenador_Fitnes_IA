@@ -17,6 +17,11 @@ import BlindScreen      from './screens/BlindScreen.jsx'
 // Shared components
 import BottomNav from './components/shared/BottomNav.jsx'
 
+// Contexto global de entrenamiento
+// WorkoutProvider envuelve toda la app para que PlannerScreen pueda
+// guardar la rutina adaptada y WorkoutScreen la lea sin prop drilling.
+import { WorkoutProvider } from './context/WorkoutContext.jsx'
+
 // ─── Registro de pantallas oficiales ──────────────────────────────────────────
 const SCREENS = [
   { id: 'onboarding', label: 'Inicio',     Component: OnboardingScreen },
@@ -38,7 +43,6 @@ function AppRouter() {
   const location = useLocation()
   const [currentScreen, setCurrentScreen] = useState('onboarding')
 
-  // Sincronizar el historial del dispositivo con el estado de React
   useEffect(() => {
     const path = location.pathname.substring(1)
     if (path && SCREENS.some(s => s.id === path)) {
@@ -49,7 +53,6 @@ function AppRouter() {
     }
   }, [location, navigate])
 
-  // Función puente go() que actualiza tanto la URL como la memoria
   const go = (screenId) => {
     setCurrentScreen(screenId)
     navigate(`/${screenId}`)
@@ -60,15 +63,11 @@ function AppRouter() {
   const pantallasSinNavbar = ['onboarding', 'login', 'register', 'blind']
   const mostrarNavbar = !pantallasSinNavbar.includes(currentScreen)
 
-
   return (
     <div className="wrapper" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      
-      {/* Contenedor dinámico de pantalla */}
       <div className="screen" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <Component go={go} />
       </div>
-      
       {mostrarNavbar && (
         <BottomNav
           screens={SCREENS}
@@ -76,7 +75,6 @@ function AppRouter() {
           go={go}
         />
       )}
-      
     </div>
   )
 }
@@ -85,7 +83,10 @@ function AppRouter() {
 export default function App() {
   return (
     <HashRouter>
-      <AppRouter />
+      {/* WorkoutProvider aquí para que todas las pantallas accedan al contexto */}
+      <WorkoutProvider>
+        <AppRouter />
+      </WorkoutProvider>
     </HashRouter>
   )
 }
