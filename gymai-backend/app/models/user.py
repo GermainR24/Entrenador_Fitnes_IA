@@ -1,6 +1,4 @@
-from calendar import c
 import re
-from symtable import Class
 from pydantic import field_validator
 from datetime import datetime, timezone
 from sqlmodel import SQLModel, Field
