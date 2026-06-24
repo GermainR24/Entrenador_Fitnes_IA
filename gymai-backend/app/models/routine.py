@@ -45,3 +45,44 @@ class RoutineResponse(SQLModel):
         default=None, 
         description="Mensaje en lenguaje natural del LLM explicando la adaptación de la rutina"
     )
+
+
+# ─── Schemas para el plan semanal (WeeklyScreen) ──────────────────────────────
+
+class WeeklyPlanRequest(SQLModel):
+    """
+    Payload que WeeklyScreen envía al endpoint POST /routines/weekly-plan.
+    El frontend calcula estos valores a partir de GET /history/weekly.
+    """
+    trained_weekdays: List[int] = Field(
+        default=[],
+        description="Días ya entrenados esta semana: 0=lun … 6=dom"
+    )
+    trained_exercises: List[str] = Field(
+        default=[],
+        description="Ejercicios ya realizados esta semana (nombres tal como se guardaron)"
+    )
+    feel_average: Optional[float] = Field(
+        default=None,
+        description="Promedio de feel_value de las sesiones de esta semana"
+    )
+    goal: str = Field(
+        default="hipertrofia",
+        description="Objetivo principal: fuerza | hipertrofia | resistencia | general"
+    )
+
+
+class WeeklyDayPlan(SQLModel):
+    """Un día del plan semanal generado por la IA."""
+    weekday: int = Field(description="0=lunes … 6=domingo")
+    label: str = Field(description="Etiqueta corta, ej: 'Pecho'")
+    sub: str = Field(description="Subtítulo, ej: 'Tríceps'")
+    group: Optional[str] = Field(default=None, description="Ej: 'Pecho / Tríceps'")
+    exercises: Optional[str] = Field(default=None, description="Ejercicios separados por ·")
+    isRest: bool = Field(default=False)
+
+
+class WeeklyPlanResponse(SQLModel):
+    """Respuesta completa del endpoint POST /routines/weekly-plan."""
+    days: List[WeeklyDayPlan] = Field(description="Siempre 7 elementos (lun-dom)")
+    ai_feedback: str = Field(description="Explicación del plan en español")

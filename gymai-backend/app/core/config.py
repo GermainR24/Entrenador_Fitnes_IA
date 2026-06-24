@@ -1,14 +1,12 @@
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = Field(...)
-    GEMINI_API_KEY: str = Field(..., description="Clave API para acceder a Gemini")
-    
-    model_config= SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    GEMINI_API_KEY: str = ""
+    DATABASE_URL:   str = "sqlite:///./gym.db"
+    SECRET_KEY:     str = "dev_secret_key_cambiar_en_produccion"  
+    GROQ_API_KEY: str = ""
 
-settings = Settings()    
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+settings = Settings()

@@ -1,6 +1,9 @@
+
 from app.api.auth.repository import UserRepository
+from app.core.security import hash_password, verify_password
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.models.user import User, UserCreate, UserLogin
+
 
 class UserAlreadyExistsError(Exception):
     pass
@@ -11,6 +14,7 @@ class DatabaseError(Exception):
 class InvalidCredentialsError(Exception):
     pass
 
+
 class UserService:
     def __init__(self, repository: UserRepository):
         self.repository = repository
@@ -20,7 +24,7 @@ class UserService:
             raise UserAlreadyExistsError("Email ya registrado")
 
         user = User(
-            hashed_password=(user_create.password),
+            hashed_password=hash_password(user_create.password),  # ← bcrypt real
             **user_create.model_dump(exclude={"password"})
         )
 
@@ -33,6 +37,7 @@ class UserService:
 
     def login(self, user_login: UserLogin) -> User:
         user = self.repository.get_by_email(user_login.email)
-        if not user or user.hashed_password != user_login.password:
-            raise InvalidCredentialsError("User/password inválido")
+        # verify_password compara texto plano contra el hash bcrypt
+        if not user or not verify_password(user_login.password, user.hashed_password):
+            raise InvalidCredentialsError("Email o contraseña incorrectos")
         return user
