@@ -11,11 +11,15 @@ const DEFAULT_ROUTINE = [
 ]
 
 export function WorkoutProvider({ children }) {
-  const [routine,      setRoutine]      = useState(DEFAULT_ROUTINE)
-  const [exerciseIdx,  setExerciseIdx]  = useState(0)
-  const [currentSerie, setCurrentSerie] = useState(1)
-  const [hasFatigue,   setHasFatigue]   = useState(false)
+  const [routine,       setRoutine]       = useState(DEFAULT_ROUTINE)
+  const [exerciseIdx,   setExerciseIdx]   = useState(0)
+  const [currentSerie,  setCurrentSerie]  = useState(1)
+  const [hasFatigue,    setHasFatigue]    = useState(false)
   const [sessionActive, setSessionActive] = useState(false)
+
+  // ── Datos del check-in diario (Planner → WorkoutScreen → /history/save) ──
+  const [feelValue, setFeelValue] = useState(7)
+  const [painZones, setPainZones] = useState([])
 
   const currentExercise = routine[exerciseIdx] ?? null
   const totalExercises  = routine.length
@@ -33,8 +37,11 @@ export function WorkoutProvider({ children }) {
     }
   }
 
-  function startSession(customRoutine) {
+  // Ahora recibe feelValue y painZones desde PlannerScreen
+  function startSession(customRoutine, feel = 7, pain = []) {
     if (customRoutine) setRoutine(customRoutine)
+    setFeelValue(feel)
+    setPainZones(pain)
     setExerciseIdx(0)
     setCurrentSerie(1)
     setSessionActive(true)
@@ -53,13 +60,14 @@ export function WorkoutProvider({ children }) {
       currentSerie, nextSerie,
       hasFatigue, setHasFatigue,
       sessionActive, startSession, endSession,
+      feelValue, painZones,   // ← expuestos para que WorkoutScreen los lea
     }}>
       {children}
     </WorkoutContext.Provider>
   )
 }
 
-/** Hook: const { currentExercise, nextSerie, ... } = useWorkout() */
+/** Hook: const { currentExercise, nextSerie, feelValue, painZones, ... } = useWorkout() */
 export function useWorkout() {
   const ctx = useContext(WorkoutContext)
   if (!ctx) throw new Error('useWorkout must be used inside <WorkoutProvider>')

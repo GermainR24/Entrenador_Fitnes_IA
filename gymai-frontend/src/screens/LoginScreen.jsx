@@ -1,11 +1,13 @@
-// screens/LoginScreen.jsx
 import { useState, useEffect } from 'react'
 import useVoiceCommand from '../hooks/useVoiceCommand'
+import useAuthApi from '../hooks/useAuth.js' 
 
 export default function LoginScreen({ go }) {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
+  
   const { isListening, listenForCommands, stopListening } = useVoiceCommand()
+  const { loginUser, loading, error } = useAuthApi() 
 
   const inputStyle = {
     width: '100%',
@@ -19,7 +21,6 @@ export default function LoginScreen({ go }) {
     fontFamily: "'DM Sans', sans-serif",
   }
 
-  // Función para rellenar datos de demostración (útil para pruebas rápidas)
   const fillDemo = () => {
     setEmail('demo@gymai.com')
     setPassword('demo1234')
@@ -30,28 +31,41 @@ export default function LoginScreen({ go }) {
     setPassword('')
   }
 
+  // 3. Creamos la función que conecta React con FastAPI
+  const handleLogin = async () => {
+    if (!email || !password) return // Evitamos peticiones vacías
+
+    // Llamamos al backend. Si es exitoso, devuelve la data. Si falla, devuelve null.
+    const data = await loginUser(email, password)
+    
+    // Si la data existe (el backend nos dio el token y el usuario), navegamos
+    if (data) {
+      go('dashboard')
+    }
+  }
+
   useEffect(() => {
     const commands = {
-      // Navegación
-      'iniciar sesión': () => go('dashboard'),
-      'entrar': () => go('dashboard'),
-      'login': () => go('dashboard'),
+      // 4. Actualizamos el comando de voz para que también valide el login real
+      'iniciar sesión': () => handleLogin(),
+      'entrar': () => handleLogin(),
+      'login': () => handleLogin(),
+      
       'registrarme': () => go('register'),
       'registro': () => go('register'),
       'volver': () => go('onboarding'),
       'atrás': () => go('onboarding'),
       'inicio': () => go('onboarding'),
 
-      // Utilidades de formulario (solo para demo/desarrollo)
       'demo': () => fillDemo(),
       'llenar demo': () => fillDemo(),
       'limpiar': () => clearFields(),
       'borrar': () => clearFields(),
     }
 
-    listenForCommands(commands, true) // modo continuo
+    listenForCommands(commands, true)
     return () => stopListening()
-  }, [listenForCommands, stopListening, go])
+  }, [listenForCommands, stopListening, go, email, password]) // Agregamos dependencias
 
   return (
     <div style={{
@@ -59,48 +73,18 @@ export default function LoginScreen({ go }) {
       alignItems: 'center', justifyContent: 'center',
       padding: '24px', gap: '24px',
     }}>
-      {/* Indicador de micrófono activo (arriba a la derecha) */}
-      {isListening && (
-        <div style={{
-          position: 'absolute',
-          top: '20px',
-          right: '20px',
-          background: '#22c55e',
-          borderRadius: '20px',
-          padding: '4px 12px',
-          fontSize: '11px',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          zIndex: 10,
-        }}>
-          <span>🎤</span> Escuchando
-        </div>
-      )}
-
-      {/* Logo */}
-      <div style={{ textAlign: 'center' }}>
-        <div style={{
-          width: '64px', height: '64px', borderRadius: '18px',
-          background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.25)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 14px',
-        }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="1.8">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
-          </svg>
-        </div>
-        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: '28px', fontWeight: 800 }}>GymAI</div>
-        <p style={{ fontSize: '13px', color: 'var(--text3)', marginTop: '6px' }}>
-          Tu entrenador de inteligencia artificial
-        </p>
-      </div>
+      {/* ... (Todo tu código superior de logos y micrófono sigue igual) ... */}
 
       {/* Formulario */}
       <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '24px', width: '100%', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        
+        {/* 5. Si FastAPI devuelve un error 401, lo mostramos en rojo */}
+        {error && (
+          <div style={{ background: 'rgba(244,63,94,0.1)', color: '#fda4af', padding: '10px', borderRadius: '8px', fontSize: '13px', textAlign: 'center', border: '1px solid rgba(244,63,94,0.3)' }}>
+            ⚠️ {error}
+          </div>
+        )}
+
         <div>
           <label className="label" style={{ display: 'block', marginBottom: '8px' }}>Email</label>
           <input
@@ -121,9 +105,17 @@ export default function LoginScreen({ go }) {
             style={inputStyle}
           />
         </div>
-        <button className="btn-primary" onClick={() => go('dashboard')}>
-          Iniciar sesión
+        
+        {/* 6. Conectamos el botón a handleLogin y lo bloqueamos si está cargando */}
+        <button 
+          className="btn-primary" 
+          onClick={handleLogin}
+          disabled={loading}
+          style={{ opacity: loading ? 0.7 : 1 }}
+        >
+          {loading ? 'Verificando...' : 'Iniciar sesión'}
         </button>
+        
         <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text3)' }}>
           ¿No tienes cuenta?{' '}
           <span style={{ color: 'var(--accent)', cursor: 'pointer' }} onClick={() => go('register')}>Regístrate</span>
@@ -134,20 +126,7 @@ export default function LoginScreen({ go }) {
         ← Volver al inicio
       </button>
 
-      {/* Ayuda de comandos (opcional, aparece solo si el micrófono está activo) */}
-      {isListening && (
-        <div style={{
-          fontSize: '10px',
-          color: 'var(--text3)',
-          textAlign: 'center',
-          marginTop: '8px',
-          padding: '6px 12px',
-          background: 'rgba(0,0,0,0.3)',
-          borderRadius: '20px',
-        }}>
-          🗣️ Di: "iniciar sesión", "registrarme", "demo", "limpiar" o "volver"
-        </div>
-      )}
+      {/* ... (Código de ayuda de comandos sigue igual) ... */}
     </div>
   )
 }

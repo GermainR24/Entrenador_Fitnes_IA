@@ -2,6 +2,12 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
 
+// NOTA DE CAMBIOS respecto a la versión original:
+// - startCamera ahora acepta un parámetro opcional `onLandmarks(landmarks)`
+//   que se invoca en cada frame con resultados válidos. Esto permite conectar
+//   usePostureAnalysis sin tocar la lógica de cámara/dibujo existente.
+// - Todo lo demás (captura, canvas, ciclo de vida) se mantiene igual.
+
 export default function useMediaPipe() {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
@@ -12,9 +18,10 @@ export default function useMediaPipe() {
   const isActiveRef = useRef(false)
   const lastFrameTimeRef = useRef(0)
   const isMountedRef = useRef(true)
-  const isModelReadyRef = useRef(false)   // <<< NUEVO: indica si el modelo ya cargó
+  const isModelReadyRef = useRef(false)   // <<< indica si el modelo ya cargó
 
   const visibilityHandlerRef = useRef(null)
+  const onLandmarksRef = useRef(null)     // <<< NUEVO: callback externo de análisis
 
   const [isActive, setIsActive] = useState(false)
   const [error, setError] = useState(null)
@@ -49,12 +56,16 @@ export default function useMediaPipe() {
       setError(null)
     }
     isModelReadyRef.current = false
+    onLandmarksRef.current = null
   }, [])
 
-  const startCamera = useCallback(async () => {
+  // `onLandmarks` es opcional: si no se pasa, el hook funciona exactamente
+  // igual que antes (solo cámara + esqueleto dibujado).
+  const startCamera = useCallback(async (onLandmarks) => {
     if (isActiveRef.current) stopCamera()
     setError(null)
     isModelReadyRef.current = false
+    onLandmarksRef.current = typeof onLandmarks === 'function' ? onLandmarks : null
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -110,6 +121,11 @@ export default function useMediaPipe() {
         if (!isModelReadyRef.current && results.poseLandmarks) {
           isModelReadyRef.current = true
           console.log("Modelo MediaPipe listo")
+        }
+
+        // <<< NUEVO: reenviar landmarks crudos al analizador externo, si existe
+        if (results.poseLandmarks && onLandmarksRef.current) {
+          onLandmarksRef.current(results.poseLandmarks)
         }
       })
       
