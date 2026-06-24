@@ -1,16 +1,11 @@
-from sqlmodel import Session, select
-from typing import List
+from sqlmodel import Session
+from typing import List, Optional
 from datetime import datetime, timezone
 from app.models.routine import ExerciseItem
-from app.models.history import WorkoutSession, ExerciseLog
 
 # ─── Split semanal: 0=lunes … 6=domingo ──────────────────────────────────────
-# Cada día tiene un grupo muscular distinto con ejercicios y pesos base.
-# Los pesos son valores de referencia intermedios — la IA los ajusta
-# en process_daily_checkin() según feel_value y pain_zones.
-
 WEEKLY_SPLIT = {
-    0: {  # Lunes — Pecho + Tríceps
+    0: {
         "label": "Pecho y Tríceps",
         "exercises": [
             ExerciseItem(name="Press de banca",             sets_description="4 × 8–10 reps · 75 kg"),
@@ -20,7 +15,7 @@ WEEKLY_SPLIT = {
             ExerciseItem(name="Extensiones polea alta",     sets_description="3 × 15 reps · 15 kg"),
         ]
     },
-    1: {  # Martes — Espalda + Bíceps
+    1: {
         "label": "Espalda y Bíceps",
         "exercises": [
             ExerciseItem(name="Remo con mancuerna",         sets_description="4 × 10–12 reps · 30 kg"),
@@ -30,7 +25,7 @@ WEEKLY_SPLIT = {
             ExerciseItem(name="Curl martillo",              sets_description="3 × 12 reps · 12 kg"),
         ]
     },
-    2: {  # Miércoles — Piernas + Glúteos
+    2: {
         "label": "Piernas y Glúteos",
         "exercises": [
             ExerciseItem(name="Sentadilla con barra",       sets_description="4 × 8–10 reps · 80 kg"),
@@ -40,7 +35,7 @@ WEEKLY_SPLIT = {
             ExerciseItem(name="Elevación de talones",       sets_description="4 × 15 reps · Peso corporal"),
         ]
     },
-    3: {  # Jueves — Hombros + Trapecios
+    3: {
         "label": "Hombros y Trapecios",
         "exercises": [
             ExerciseItem(name="Press militar mancuernas",   sets_description="4 × 8–10 reps · 22 kg"),
@@ -50,7 +45,7 @@ WEEKLY_SPLIT = {
             ExerciseItem(name="Encogimientos de hombros",   sets_description="3 × 15 reps · 30 kg"),
         ]
     },
-    4: {  # Viernes — Pecho + Tríceps (segunda sesión)
+    4: {
         "label": "Pecho y Tríceps",
         "exercises": [
             ExerciseItem(name="Press de banca inclinado",   sets_description="4 × 8–10 reps · 65 kg"),
@@ -60,7 +55,7 @@ WEEKLY_SPLIT = {
             ExerciseItem(name="Fondos en banco",            sets_description="3 × 15 reps · Peso corporal"),
         ]
     },
-    5: {  # Sábado — Espalda + Bíceps (segunda sesión)
+    5: {
         "label": "Espalda y Bíceps",
         "exercises": [
             ExerciseItem(name="Peso muerto convencional",   sets_description="4 × 6–8 reps · 100 kg"),
@@ -70,7 +65,7 @@ WEEKLY_SPLIT = {
             ExerciseItem(name="Curl concentrado",           sets_description="3 × 12 reps · 10 kg"),
         ]
     },
-    6: {  # Domingo — Descanso activo / Core
+    6: {
         "label": "Core y Movilidad",
         "exercises": [
             ExerciseItem(name="Plancha abdominal",          sets_description="4 × 45 seg · Peso corporal"),
@@ -82,27 +77,33 @@ WEEKLY_SPLIT = {
     },
 }
 
+DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
 
 class RoutineRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_base_routine(self, user_id: int) -> List[ExerciseItem]:
-        """
-        Devuelve la rutina base del día según el split semanal.
-        0=lunes … 6=domingo (Python weekday()).
+    def _get_weekday(self, weekday: Optional[int]) -> int:
+        """Devuelve el weekday solicitado o el día actual si no se especifica."""
+        if weekday is not None and 0 <= weekday <= 6:
+            return weekday
+        return datetime.now(timezone.utc).weekday()
 
-        En el futuro esto puede consultar la BD para:
-        - Ajustar pesos según el último peso registrado por el usuario
-        - Detectar si ya entrenó hoy y sugerir el día siguiente
-        - Personalizar el split según el nivel del usuario
+    def get_base_routine(self, user_id: int, weekday: Optional[int] = None) -> List[ExerciseItem]:
         """
-        weekday = datetime.now(timezone.utc).weekday()  # 0=lun … 6=dom
-        day_plan = WEEKLY_SPLIT.get(weekday, WEEKLY_SPLIT[0])
-        return day_plan["exercises"]
+        Devuelve la rutina base del día indicado (0=lun…6=dom).
+        Si weekday es None, usa el día actual.
+        """
+        day = self._get_weekday(weekday)
+        return WEEKLY_SPLIT[day]["exercises"]
 
-    def get_base_routine_label(self, user_id: int) -> str:
-        """Devuelve el nombre del grupo muscular de hoy (para mostrarlo en el Planner)."""
-        weekday = datetime.now(timezone.utc).weekday()
-        day_plan = WEEKLY_SPLIT.get(weekday, WEEKLY_SPLIT[0])
-        return day_plan["label"]
+    def get_base_routine_label(self, user_id: int, weekday: Optional[int] = None) -> str:
+        """Devuelve el nombre del grupo muscular del día indicado."""
+        day = self._get_weekday(weekday)
+        return WEEKLY_SPLIT[day]["label"]
+
+    def get_day_name(self, weekday: Optional[int] = None) -> str:
+        """Devuelve el nombre del día en español."""
+        day = self._get_weekday(weekday)
+        return DIAS_SEMANA[day]

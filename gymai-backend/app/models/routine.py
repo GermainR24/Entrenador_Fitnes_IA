@@ -17,22 +17,22 @@ class ExerciseItem(SQLModel):
 
 # --- Modelo para recibir los datos de React (Frontend -> Backend) ---
 
+
 class CheckInRequest(SQLModel):
-    feel_value: int = Field(
-        ge=1, 
-        le=10, 
-        description="Nivel de energía reportado (1 = Agotado, 10 = Con energía)"
-    )
-    pain_zones: List[str] = Field(
-        default=[], 
-        description="Lista de IDs de músculos con molestia (ej. ['pectoral', 'shoulder_right'])"
+    feel_value: int = Field(ge=1, le=10)
+    pain_zones: List[str] = Field(default=[])
+    weekday: Optional[int] = Field(
+        default=None,
+        ge=0, le=6,
+        description="Día de la semana a cargar: 0=lun…6=dom. Si es None usa el día actual."
     )
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "feel_value": 7,
-                "pain_zones": ["shoulder_right", "elbow_left"]
+                "pain_zones": [],
+                "weekday": 2   
             }
         }
     }

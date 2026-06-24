@@ -12,33 +12,82 @@ const VOICE_MUSCLE_MAP = {
   'cuello': 'neck', 'trapecio': 'trapezius', 'espalda alta': 'upper-back',
   'espalda baja': 'lower-back', 'lumbar': 'lower-back', 'abdomen': 'abs',
   'abdominales': 'abs', 'oblicuo': 'obliques', 'glúteo': 'gluteal', 'glúteos': 'gluteal',
-  'aductores': 'adductors', 'isquiotibiales': 'hamstring', 'pierna trasera': 'hamstring',
-  'pantorrilla': 'calves', 'pantorrillas': 'calves', 'pie': 'feet', 'pies': 'feet',
-  'cuádriceps': 'quadriceps', 'cuadriceps': 'quadriceps', 'rodilla': 'knees',
-  'tibial': 'tibialis', 'tobillo': 'ankles', 'tobillos': 'ankles',
+  'aductores': 'adductors', 'isquiotibiales': 'hamstring',
+  'pantorrilla': 'calves', 'pantorrillas': 'calves',
+  'cuádriceps': 'quadriceps', 'cuadriceps': 'quadriceps',
+  'rodilla': 'knees', 'tobillo': 'ankles',
 }
 
-// Días de la semana en español para el saludo de voz
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+const DIAS_VOZ = {
+  'lunes': 0, 'martes': 1, 'miércoles': 2, 'miercoles': 2,
+  'jueves': 3, 'viernes': 4, 'sábado': 5, 'sabado': 5, 'domingo': 6,
+}
+
+// Día actual de la semana (0=lun…6=dom)
+function getDiaActual() {
+  const d = new Date().getDay() // 0=dom…6=sab
+  return d === 0 ? 6 : d - 1   // convertir a 0=lun…6=dom
+}
 
 export default function PlannerScreen({ go }) {
-  const [feelVal,    setFeelVal]    = useState(7)
-  const [painZones,  setPainZones]  = useState(new Set())
-  const [routine,    setRoutine]    = useState([])
-  const [loading,    setLoading]    = useState(false)
-  const [aiFeedback, setAiFeedback] = useState(null)
-  const [errorApi,   setErrorApi]   = useState(null)
-  const [dayLabel,   setDayLabel]   = useState('Cargando...')  // ← dinámico
+  const diaActual = getDiaActual()
+
+  const [selectedDay, setSelectedDay] = useState(diaActual)  // día seleccionado
+  const [feelVal,     setFeelVal]     = useState(7)
+  const [painZones,   setPainZones]   = useState(new Set())
+  const [routine,     setRoutine]     = useState([])
+  const [loading,     setLoading]     = useState(false)
+  const [aiFeedback,  setAiFeedback]  = useState(null)
+  const [errorApi,    setErrorApi]    = useState(null)
+  const [dayLabel,    setDayLabel]    = useState('Cargando...')
 
   const { isListening, listenForCommands, stopListening } = useVoiceCommand()
   const commandsRef = useRef(null)
   const { startSession } = useWorkout()
   const { authFetch } = useAuth()
 
-  // Día actual para mostrar en UI
-  const diaHoy = DIAS_SEMANA[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]
+  // ── Carga la rutina base del día seleccionado ────────────────────────────
+  const cargarRutinaDia = useCallback(async (weekday) => {
+    setLoading(true)
+    setAiFeedback(null)
+    setErrorApi(null)
+    try {
+      const res = await authFetch('/routines/adapt', {
+        method: 'POST',
+        body: JSON.stringify({ feel_value: 8, pain_zones: [], weekday }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setRoutine(data.exercises)
+        if (data.day_label) setDayLabel(data.day_label)
+      }
+    } catch (err) {
+      console.error('Error cargando rutina:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [authFetch])
 
-  // ── Síntesis de voz ─────────────────────────────────────────────────────────
+  // ── Carga inicial ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    cargarRutinaDia(diaActual)
+    // Saludo de voz solo al montar
+    setTimeout(() => {
+      speak(
+        `Bienvenido a tu check-in del ${DIAS_SEMANA[diaActual]}. ` +
+        `Puedes cambiar el día con los botones si quieres saltarte alguno.`
+      )
+    }, 300)
+    return () => window.speechSynthesis.cancel()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Al cambiar el día seleccionado, recargar rutina ───────────────────────
+  useEffect(() => {
+    cargarRutinaDia(selectedDay)
+  }, [selectedDay]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Síntesis de voz ────────────────────────────────────────────────────────
   const speak = useCallback((text, onComplete = null) => {
     window.speechSynthesis.cancel()
     stopListening()
@@ -52,48 +101,23 @@ export default function PlannerScreen({ go }) {
     window.speechSynthesis.speak(utterance)
   }, [listenForCommands, stopListening])
 
-  const addPainZone    = useCallback((slug) => setPainZones(prev => new Set([...prev, slug])), [])
-  const removePainZone = useCallback((slug) => setPainZones(prev => { const n = new Set(prev); n.delete(slug); return n }), [])
-  const togglePain     = useCallback((slug) => setPainZones(prev => { const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n }), [])
-  const clearPainZones = useCallback(() => setPainZones(new Set()), [])
+  // ── Navegación entre días ─────────────────────────────────────────────────
+  const irDiaSiguiente  = useCallback(() => setSelectedDay(d => (d + 1) % 7), [])
+  const irDiaAnterior   = useCallback(() => setSelectedDay(d => (d + 6) % 7), [])
+  const irDiaActual     = useCallback(() => setSelectedDay(diaActual), [diaActual])
 
-  // ── Carga inicial: obtener rutina base del día sin llamar a la IA ───────────
-  useEffect(() => {
-    async function cargarRutinaBase() {
-      try {
-        // Llamamos con feel_value=8 y sin pain_zones para que el backend
-        // devuelva la rutina base del día sin adaptar (lógica de eficiencia)
-        const res = await authFetch('/routines/adapt', {
-          method: 'POST',
-          body: JSON.stringify({ feel_value: 8, pain_zones: [] }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setRoutine(data.exercises)
-          if (data.day_label) setDayLabel(data.day_label)
-          speak(
-            `Bienvenido a tu check-in del ${diaHoy}. ` +
-            `Tu rutina de hoy es ${data.day_label ?? 'entrenamiento'}. ` +
-            `Ajusta tu energía o indícame qué músculos te molestan.`
-          )
-        }
-      } catch (err) {
-        console.error('Error cargando rutina base:', err)
-        speak(`Bienvenido a tu check-in del ${diaHoy}. Ajusta tu energía antes de entrenar.`)
-      }
-    }
-    cargarRutinaBase()
-    return () => window.speechSynthesis.cancel()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Llamada a la IA para adaptar la rutina ──────────────────────────────────
+  // ── Adaptar con IA ────────────────────────────────────────────────────────
   const generarRutinaAdaptada = useCallback(async () => {
     setLoading(true)
     setErrorApi(null)
     try {
       const res = await authFetch('/routines/adapt', {
         method: 'POST',
-        body: JSON.stringify({ feel_value: feelVal, pain_zones: [...painZones] }),
+        body: JSON.stringify({
+          feel_value: feelVal,
+          pain_zones: [...painZones],
+          weekday: selectedDay,
+        }),
       })
       if (!res.ok) throw new Error('No se pudo obtener la rutina adaptada.')
       const data = await res.json()
@@ -103,33 +127,40 @@ export default function PlannerScreen({ go }) {
 
       const ejerciciosHablados = data.exercises.map((ex, i) => {
         const texto = (ex.sets_description || '')
-          .replace(/×/g, 'series de').replace(/–/g, 'a').replace(/-/g, 'a').replace(/reps/g, 'repeticiones')
+          .replace(/×/g, 'series de').replace(/–/g, 'a').replace(/reps/g, 'repeticiones')
         return `Ejercicio ${i + 1}: ${ex.name}. ${texto}.`
       }).join(' ')
 
-      speak(
-        `${data.ai_feedback ?? 'Rutina adaptada.'} ` +
-        `${ejerciciosHablados} Di "aceptar" para iniciar.`
-      )
+      speak(`${data.ai_feedback ?? 'Rutina adaptada.'} ${ejerciciosHablados} Di "aceptar" para iniciar.`)
     } catch (err) {
       setErrorApi(err.message || 'Error de comunicación con el backend.')
       speak('Hubo un error al conectar con el servidor.')
     } finally {
       setLoading(false)
     }
-  }, [feelVal, painZones, speak, authFetch])
+  }, [feelVal, painZones, selectedDay, speak, authFetch])
 
-  // ── Aceptar y entrenar ───────────────────────────────────────────────────────
+  // ── Aceptar y entrenar ────────────────────────────────────────────────────
   const aceptarYEntrenar = useCallback(() => {
     startSession(routine, feelVal, [...painZones])
     go('workout')
   }, [routine, feelVal, painZones, startSession, go])
 
-  const hasPain = painZones.size > 0
-  const actionsRef = useRef(null)
-  actionsRef.current = { generarRutinaAdaptada, aceptarYEntrenar, go, addPainZone, removePainZone, clearPainZones }
+  const addPainZone    = useCallback((s) => setPainZones(prev => new Set([...prev, s])), [])
+  const removePainZone = useCallback((s) => setPainZones(prev => { const n = new Set(prev); n.delete(s); return n }), [])
+  const togglePain     = useCallback((s) => setPainZones(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n }), [])
+  const clearPainZones = useCallback(() => setPainZones(new Set()), [])
 
-  // ── Comandos de voz ──────────────────────────────────────────────────────────
+  const hasPain = painZones.size > 0
+  const esHoy   = selectedDay === diaActual
+  const actionsRef = useRef(null)
+  actionsRef.current = {
+    generarRutinaAdaptada, aceptarYEntrenar, go,
+    addPainZone, removePainZone, clearPainZones,
+    irDiaSiguiente, irDiaAnterior, irDiaActual,
+  }
+
+  // ── Comandos de voz ───────────────────────────────────────────────────────
   useEffect(() => {
     const commands = {
       'volver':   () => actionsRef.current.go('dashboard'),
@@ -140,10 +171,29 @@ export default function PlannerScreen({ go }) {
       'generar rutina':    () => actionsRef.current.generarRutinaAdaptada(),
       'actualizar rutina': () => actionsRef.current.generarRutinaAdaptada(),
       'adaptar':           () => actionsRef.current.generarRutinaAdaptada(),
+
+      // Navegación de días por voz
+      'siguiente día':  () => actionsRef.current.irDiaSiguiente(),
+      'día siguiente':  () => actionsRef.current.irDiaSiguiente(),
+      'siguiente':      () => actionsRef.current.irDiaSiguiente(),
+      'día anterior':   () => actionsRef.current.irDiaAnterior(),
+      'anterior':       () => actionsRef.current.irDiaAnterior(),
+      'hoy':            () => actionsRef.current.irDiaActual(),
+      'volver a hoy':   () => actionsRef.current.irDiaActual(),
+      'saltar día':     () => actionsRef.current.irDiaSiguiente(),
+
+      // Ir a un día específico por nombre
+      ...Object.entries(DIAS_VOZ).reduce((acc, [nombre, idx]) => {
+        acc[nombre] = () => setSelectedDay(idx)
+        return acc
+      }, {}),
+
+      // Energía
       'más energía':   () => setFeelVal(prev => Math.min(prev + 1, 10)),
       'menos energía': () => setFeelVal(prev => Math.max(prev - 1, 1)),
       'limpiar dolores': () => actionsRef.current.clearPainZones(),
-      'sin dolor':       () => actionsRef.current.clearPainZones(),
+
+      // Dolores por voz
       ...Object.keys(VOICE_MUSCLE_MAP).reduce((acc, keyword) => {
         const slug = VOICE_MUSCLE_MAP[keyword]
         acc[`me duele el ${keyword}`]  = () => actionsRef.current.addPainZone(slug)
@@ -154,16 +204,18 @@ export default function PlannerScreen({ go }) {
         return acc
       }, {})
     }
+
     for (let i = 1; i <= 10; i++) {
       commands[`nivel ${i}`]       = () => setFeelVal(i)
       commands[`poner nivel ${i}`] = () => setFeelVal(i)
     }
+
     commandsRef.current = commands
     listenForCommands(commands, true)
     return () => stopListening()
   }, [listenForCommands, stopListening])
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       <div className="nav-bar">
@@ -171,22 +223,55 @@ export default function PlannerScreen({ go }) {
         <span className="badge badge-amber">Check-in diario</span>
         {isListening && (
           <span style={{ marginLeft: 'auto', backgroundColor: '#22c55e', borderRadius: '20px', padding: '2px 10px', fontSize: '10px', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span>🎤</span> Escuchando
+            🎤 Escuchando
           </span>
         )}
       </div>
 
       <div className="screen-body" style={{ paddingBottom: '30px' }}>
 
-        {/* Encabezado dinámico */}
-        <div>
-          <div className="label" style={{ marginBottom: '4px' }}>{diaHoy} — Plan de hoy</div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: '20px', fontWeight: 700 }}>
-            {dayLabel}
+        {/* ── Selector de día ── */}
+        <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '12px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+
+            {/* Botón anterior */}
+            <button
+              onClick={irDiaAnterior}
+              style={{ width: '36px', height: '36px', borderRadius: '10px', border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text)', fontSize: '18px', cursor: 'pointer', flexShrink: 0 }}
+            >‹</button>
+
+            {/* Día actual */}
+            <div style={{ textAlign: 'center', flex: 1 }}>
+              <div className="label" style={{ marginBottom: '2px', fontSize: '10px' }}>
+                {esHoy ? 'Hoy' : 'Entrenando el'}
+              </div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: '18px', fontWeight: 700 }}>
+                {DIAS_SEMANA[selectedDay]}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--accent)', marginTop: '1px' }}>
+                {loading ? '...' : dayLabel}
+              </div>
+            </div>
+
+            {/* Botón siguiente */}
+            <button
+              onClick={irDiaSiguiente}
+              style={{ width: '36px', height: '36px', borderRadius: '10px', border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text)', fontSize: '18px', cursor: 'pointer', flexShrink: 0 }}
+            >›</button>
           </div>
+
+          {/* Botón "Volver a hoy" si está en otro día */}
+          {!esHoy && (
+            <button
+              onClick={irDiaActual}
+              style={{ width: '100%', marginTop: '10px', padding: '6px', borderRadius: '8px', border: '1px solid rgba(6,182,212,0.3)', background: 'rgba(6,182,212,0.08)', color: 'var(--accent)', fontSize: '12px', cursor: 'pointer' }}
+            >
+              ↩ Volver al día de hoy ({DIAS_SEMANA[diaActual]})
+            </button>
+          )}
         </div>
 
-        {/* Slider de energía */}
+        {/* ── Slider de energía ── */}
         <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px' }}>
           <div className="label" style={{ marginBottom: '10px' }}>¿Cómo te sientes hoy?</div>
           <input type="range" className="range-custom" min="1" max="10" value={feelVal}
@@ -198,7 +283,7 @@ export default function PlannerScreen({ go }) {
           </div>
         </div>
 
-        {/* Mapa de molestias */}
+        {/* ── Mapa de molestias ── */}
         <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px' }}>
           <div className="label" style={{ marginBottom: '10px' }}>Toca si tienes alguna molestia</div>
           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
@@ -209,34 +294,34 @@ export default function PlannerScreen({ go }) {
               </p>
               {hasPain && (
                 <div style={{ background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#fda4af' }}>
-                  <strong>⚠ Zonas de molestia marcadas.</strong><br />
-                  Di <strong style={{ color: 'var(--accent2)' }}>"generar rutina"</strong> para adaptar con IA.
+                  <strong>⚠ Zonas marcadas.</strong><br />
+                  Di <strong style={{ color: 'var(--accent2)' }}>"generar rutina"</strong> para adaptar.
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Feedback de la IA */}
+        {/* ── Feedback IA ── */}
         {aiFeedback && !loading && (
-          <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '16px', borderLeft: '4px solid #4ade80', background: 'rgba(74,222,128,0.03)' }}>
-            <div className="label" style={{ fontSize: '10px', color: '#4ade80', marginBottom: '6px' }}>Análisis de Adaptación de GymAI</div>
+          <div className="glass2" style={{ borderRadius: 'var(--r2)', padding: '16px', borderLeft: '4px solid #4ade80' }}>
+            <div className="label" style={{ fontSize: '10px', color: '#4ade80', marginBottom: '6px' }}>GymAI</div>
             <p style={{ fontSize: '12.5px', color: 'var(--text2)', lineHeight: 1.5, margin: 0 }}>{aiFeedback}</p>
           </div>
         )}
 
-        {/* Error */}
+        {/* ── Error ── */}
         {errorApi && (
-          <div style={{ color: '#f43f5e', fontSize: '12px', textAlign: 'center', background: 'rgba(244,63,94,0.08)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(244,63,94,0.2)' }}>
+          <div style={{ color: '#f43f5e', fontSize: '12px', textAlign: 'center', background: 'rgba(244,63,94,0.08)', padding: '10px', borderRadius: '8px' }}>
             ⚠️ {errorApi}
           </div>
         )}
 
-        {/* Lista de ejercicios */}
+        {/* ── Lista de ejercicios ── */}
         <div className="glass" style={{ borderRadius: 'var(--r2)', padding: '16px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div className="label">Rutina de Entrenamiento</div>
-            <span className="badge badge-cyan" style={{ background: loading ? 'rgba(255,255,255,0.05)' : 'rgba(6,182,212,0.15)' }}>
+            <span className="badge badge-cyan">
               {loading ? '...' : `${routine.length} ejercicios`}
             </span>
           </div>
@@ -247,22 +332,23 @@ export default function PlannerScreen({ go }) {
             ))}
             {routine.length === 0 && !loading && (
               <div style={{ fontSize: '13px', color: 'var(--text3)', textAlign: 'center', padding: '20px 0' }}>
-                Cargando rutina del día...
+                Cargando rutina...
               </div>
             )}
           </div>
           {loading && (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ fontSize: '13px', color: 'var(--accent)', background: '#12161a', padding: '8px 16px', borderRadius: '20px', border: '1px solid var(--border)' }}>
-                Recalculando con IA...
+                {aiFeedback !== null ? 'Recalculando con IA...' : 'Cargando rutina del día...'}
               </span>
             </div>
           )}
         </div>
 
-        {/* Botones */}
+        {/* ── Botones ── */}
         <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-          <button className="btn-primary" style={{ flex: 1.8 }} onClick={aceptarYEntrenar} disabled={loading || routine.length === 0}>
+          <button className="btn-primary" style={{ flex: 1.8 }}
+            onClick={aceptarYEntrenar} disabled={loading || routine.length === 0}>
             Aceptar y entrenar
           </button>
           <button className="btn-secondary"
@@ -271,6 +357,13 @@ export default function PlannerScreen({ go }) {
             {loading ? 'Procesando...' : 'Generar con IA ✨'}
           </button>
         </div>
+
+        {/* Hint de voz */}
+        {isListening && (
+          <div style={{ fontSize: '10px', color: 'var(--text3)', textAlign: 'center', padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '20px' }}>
+            🗣️ "siguiente día", "martes", "saltar día", "aceptar", "generar rutina"
+          </div>
+        )}
       </div>
     </>
   )
